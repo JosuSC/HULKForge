@@ -1,5 +1,9 @@
 # HULKForge — Compilador del Lenguaje HULK
 
+[![Rust](https://img.shields.io/badge/rust-1.70+-orange.svg)](https://www.rust-lang.org/)
+[![License](https://img.shields.io/badge/license-Academic-blue.svg)](#licencia)
+![Status](https://img.shields.io/badge/status-In%20Development-yellow.svg)
+
 **HULKForge** es la implementación de un compilador para **HULK** (Havana University Language Kompilation).
 
 Esta rama contiene la primera fase: el **Lexer (análisis léxico)**.
@@ -43,8 +47,8 @@ El lexer es la primera etapa del compilador. Convierte el código fuente en **to
 - **Escapes en strings**: Soporta secuencias de escape estándar: `\"`, `\n`, `\t`, `\\`
 - **Comentarios de línea**: Ignora automáticamente comentarios (`// ...`) sin generar tokens
 - **Manejo de EOF**: Garantiza que el último token siempre es `Eof`, facilitando el uso en el parser
-- **Velocidad**: Uso de DFAs compilados (no NFAs), procesamiento en un solo pase
-- **Seguridad**: Sin panics; todos los errores se acumulan y reportan posteriormente
+- **Velocidad**: Logos genera un lexer altamente optimizado basado en DFAs compilados
+- **Confiabilidad**: El lexer evita panics explícitos y reporta errores mediante validación
 
 ### Tokens soportados
 
@@ -54,7 +58,51 @@ El lexer es la primera etapa del compilador. Convierte el código fuente en **to
 - **Identificadores**: `x`, `camelCase`, `snake_case`, etc.
 - **Puntuación**: `(`, `)`, `{`, `}`, `[`, `]`, `;`, `,`, etc.
 
-### Estructura del código
+### Ejemplo de tokenización
+
+**Código fuente:**
+
+```hulk
+let x = 42 in print(x);
+```
+
+**Salida léxica:**
+
+```
+Let                    (línea 1, col 1)
+Ident("x")             (línea 1, col 5)
+Eq                     (línea 1, col 7)
+Number("42")           (línea 1, col 9)
+In                     (línea 1, col 12)
+Ident("print")         (línea 1, col 15)
+LParen                 (línea 1, col 20)
+Ident("x")             (línea 1, col 21)
+RParen                 (línea 1, col 22)
+Semicolon              (línea 1, col 23)
+Eof                    (línea 1, col 24)
+```
+
+**Ejemplo con error:**
+
+```hulk
+let x = #42;
+```
+
+**Salida:**
+
+```
+Let
+Ident("x")
+Eq
+[LexError] carácter inesperado: '#'  (línea 1, col 9)
+Number("42")    // El lexer continúa tras el error
+Semicolon
+Eof
+```
+
+### Estructura actual
+
+La estructura del proyecto en esta fase es:
 
 ```
 src/
@@ -62,8 +110,10 @@ src/
 └── lexer/
     ├── mod.rs           # Declaración del módulo lexer
     ├── lexer.rs         # Implementación del lexer
-    └── test.rs          # 36 test unitarios
+    └── test.rs          # Suite de tests
 ```
+
+**Nota**: Esta estructura evolucionará con el parser (`parser/`), type-checker (`semantic/`), y generador de código (`codegen/`).
 
 ---
 
@@ -85,7 +135,7 @@ cargo test -- --test-threads=1
 
 ### Cobertura de tests
 
-Los 36 tests cubren:
+La suite incluye amplia cobertura unitaria:
 - ✅ Palabras clave del lenguaje
 - ✅ Operadores de uno y múltiples caracteres
 - ✅ Números enteros y flotantes
@@ -123,6 +173,21 @@ cargo build --release
 | `thiserror` | 2 | Tipos de error con Display automático |
 | `miette` | 7 | Reportes de error con fancy output |
 | `indexmap` | 2 | HashMap que preserva orden de inserción |
+
+---
+
+## Limitaciones actuales
+
+Esta implementación del lexer establece el alcance deliberadamente en los siguientes aspectos:
+
+- ❌ **Sin comentarios multilínea** — Sólo soporta `//` de una línea
+- ❌ **Sin strings multilínea** — Los strings deben estar en una sola línea
+- ❌ **Parser no implementado** — El siguiente paso es construir el AST
+- ❌ **Identificadores internos (\_ident) requieren cuidado** — Solo válidos en código generado por el compilador, no en código de usuario
+- ❌ **Sin números en otras bases** — Solo decimal está soportado (hex, octal, binario son futuros)
+- ❌ **Sin tokens customizados en usuario** — El token enum es fijo
+
+Estas limitaciones se abordarán en fases posteriores por diseño.
 
 ---
 
