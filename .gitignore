@@ -1,0 +1,33 @@
+# Rust / Cargo
+/target/
+
+
+
+# Archivos generados por el compilador HULK (outputs de prueba)
+*.banner
+*.out
+
+# IDEs
+.idea/
+.vscode/
+*.iml
+
+# macOS
+.DS_Store
+
+# Linux
+*~
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# Cobertura de tests
+lcov.info
+tarpaulin-report.html
+coverage/
+
+# Profiling
+perf.data
+perf.data.old
+flamegraph.svg
