@@ -1,5 +1,8 @@
 # Rust / Cargo
 /target/
+cargo/
+rust-toolchain.toml
+config.toml
 
 
 

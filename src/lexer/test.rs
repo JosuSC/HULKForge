@@ -343,3 +343,731 @@ fn transpiled_code_with_internal_idents() {
     assert_eq!(toks[1], Token::InternalIdent("_total".into()));
     assert_eq!(toks[5], Token::InternalIdent("_total".into()));
 }
+
+// ─────────────────────────────────────────────────────────
+// 1. ARITHMETIC
+// ─────────────────────────────────────────────────────────
+
+#[test]
+fn arithmetic_precedence_exact() {
+    assert_eq!(
+        tokens("1 + 2 * 3"),
+        vec![
+            Token::Number("1".into()),
+            Token::Plus,
+            Token::Number("2".into()),
+            Token::Star,
+            Token::Number("3".into()),
+        ]
+    );
+}
+
+#[test]
+fn power_operator_exact() {
+    assert_eq!(
+        tokens("2 ^ 3"),
+        vec![
+            Token::Number("2".into()),
+            Token::Caret,
+            Token::Number("3".into()),
+        ]
+    );
+}
+
+#[test]
+fn division_exact() {
+    assert_eq!(
+        tokens("10 / 2"),
+        vec![
+            Token::Number("10".into()),
+            Token::Slash,
+            Token::Number("2".into()),
+        ]
+    );
+}
+
+// ─────────────────────────────────────────────────────────
+// 2. STRINGS
+// ─────────────────────────────────────────────────────────
+
+#[test]
+fn string_concat_exact() {
+    assert_eq!(
+        tokens(r#""a" @ "b""#),
+        vec![
+            Token::StringLit("a".into()),
+            Token::At,
+            Token::StringLit("b".into()),
+        ]
+    );
+}
+
+#[test]
+fn string_concat_space_exact() {
+    assert_eq!(
+        tokens(r#""a" @@ "b""#),
+        vec![
+            Token::StringLit("a".into()),
+            Token::ConcatSpace,
+            Token::StringLit("b".into()),
+        ]
+    );
+}
+
+// ─────────────────────────────────────────────────────────
+// 3. BUILTINS
+// ─────────────────────────────────────────────────────────
+
+#[test]
+fn builtin_call_exact() {
+    assert_eq!(
+        tokens("sin(PI)"),
+        vec![
+            Token::Ident("sin".into()),
+            Token::LParen,
+            Token::Ident("PI".into()),
+            Token::RParen,
+        ]
+    );
+}
+
+#[test]
+fn log_call_exact() {
+    assert_eq!(
+        tokens("log(2, 8)"),
+        vec![
+            Token::Ident("log".into()),
+            Token::LParen,
+            Token::Number("2".into()),
+            Token::Comma,
+            Token::Number("8".into()),
+            Token::RParen,
+        ]
+    );
+}
+
+// ─────────────────────────────────────────────────────────
+// 4. BLOCKS
+// ─────────────────────────────────────────────────────────
+
+#[test]
+fn block_exact() {
+    assert_eq!(
+        tokens("{ print(1); }"),
+        vec![
+            Token::LBrace,
+            Token::Ident("print".into()),
+            Token::LParen,
+            Token::Number("1".into()),
+            Token::RParen,
+            Token::Semicolon,
+            Token::RBrace,
+        ]
+    );
+}
+
+// ─────────────────────────────────────────────────────────
+// 5. FUNCTIONS
+// ─────────────────────────────────────────────────────────
+
+#[test]
+fn inline_function_exact() {
+    assert_eq!(
+        tokens("function f(x) => x + 1;"),
+        vec![
+            Token::Function,
+            Token::Ident("f".into()),
+            Token::LParen,
+            Token::Ident("x".into()),
+            Token::RParen,
+            Token::Arrow,
+            Token::Ident("x".into()),
+            Token::Plus,
+            Token::Number("1".into()),
+            Token::Semicolon,
+        ]
+    );
+}
+
+// ─────────────────────────────────────────────────────────
+// 6. LET
+// ─────────────────────────────────────────────────────────
+
+#[test]
+fn let_exact() {
+    assert_eq!(
+        tokens("let x = 1 in x"),
+        vec![
+            Token::Let,
+            Token::Ident("x".into()),
+            Token::Eq,
+            Token::Number("1".into()),
+            Token::In,
+            Token::Ident("x".into()),
+        ]
+    );
+}
+
+#[test]
+fn let_multiple_exact() {
+    assert_eq!(
+        tokens("let a=1, b=2 in a+b"),
+        vec![
+            Token::Let,
+            Token::Ident("a".into()),
+            Token::Eq,
+            Token::Number("1".into()),
+            Token::Comma,
+            Token::Ident("b".into()),
+            Token::Eq,
+            Token::Number("2".into()),
+            Token::In,
+            Token::Ident("a".into()),
+            Token::Plus,
+            Token::Ident("b".into()),
+        ]
+    );
+}
+
+// ─────────────────────────────────────────────────────────
+// 7. ASSIGNMENT
+// ─────────────────────────────────────────────────────────
+
+#[test]
+fn destructive_assign_exact() {
+    assert_eq!(
+        tokens("a := 5"),
+        vec![
+            Token::Ident("a".into()),
+            Token::ColonAssign,
+            Token::Number("5".into()),
+        ]
+    );
+}
+
+// ─────────────────────────────────────────────────────────
+// 8. IF
+// ─────────────────────────────────────────────────────────
+
+#[test]
+fn if_exact() {
+    assert_eq!(
+        tokens("if (true) 1 else 2"),
+        vec![
+            Token::If,
+            Token::LParen,
+            Token::True,
+            Token::RParen,
+            Token::Number("1".into()),
+            Token::Else,
+            Token::Number("2".into()),
+        ]
+    );
+}
+
+// ─────────────────────────────────────────────────────────
+// 9. WHILE
+// ─────────────────────────────────────────────────────────
+
+#[test]
+fn while_exact() {
+    assert_eq!(
+        tokens("while (x > 0) x := x - 1"),
+        vec![
+            Token::While,
+            Token::LParen,
+            Token::Ident("x".into()),
+            Token::Gt,
+            Token::Number("0".into()),
+            Token::RParen,
+            Token::Ident("x".into()),
+            Token::ColonAssign,
+            Token::Ident("x".into()),
+            Token::Minus,
+            Token::Number("1".into()),
+        ]
+    );
+}
+
+// ─────────────────────────────────────────────────────────
+// 10. FOR
+// ─────────────────────────────────────────────────────────
+
+#[test]
+fn for_exact() {
+    assert_eq!(
+        tokens("for (x in range(0,10)) print(x)"),
+        vec![
+            Token::For,
+            Token::LParen,
+            Token::Ident("x".into()),
+            Token::In,
+            Token::Ident("range".into()),
+            Token::LParen,
+            Token::Number("0".into()),
+            Token::Comma,
+            Token::Number("10".into()),
+            Token::RParen,
+            Token::RParen,
+            Token::Ident("print".into()),
+            Token::LParen,
+            Token::Ident("x".into()),
+            Token::RParen,
+        ]
+    );
+}
+
+// ─────────────────────────────────────────────────────────
+// 11. TYPES
+// ─────────────────────────────────────────────────────────
+
+#[test]
+fn type_exact() {
+    assert_eq!(
+        tokens("type A { x = 1; }"),
+        vec![
+            Token::Type,
+            Token::Ident("A".into()),
+            Token::LBrace,
+            Token::Ident("x".into()),
+            Token::Eq,
+            Token::Number("1".into()),
+            Token::Semicolon,
+            Token::RBrace,
+        ]
+    );
+}
+
+// ─────────────────────────────────────────────────────────
+// 12. INHERITANCE
+// ─────────────────────────────────────────────────────────
+
+#[test]
+fn inherits_exact() {
+    assert_eq!(
+        tokens("type B inherits A {}"),
+        vec![
+            Token::Type,
+            Token::Ident("B".into()),
+            Token::Inherits,
+            Token::Ident("A".into()),
+            Token::LBrace,
+            Token::RBrace,
+        ]
+    );
+}
+
+// ─────────────────────────────────────────────────────────
+// 13. NEW
+// ─────────────────────────────────────────────────────────
+
+#[test]
+fn new_exact() {
+    assert_eq!(
+        tokens("new Point()"),
+        vec![
+            Token::New,
+            Token::Ident("Point".into()),
+            Token::LParen,
+            Token::RParen,
+        ]
+    );
+}
+
+// ─────────────────────────────────────────────────────────
+// 14. SELF / BASE
+// ─────────────────────────────────────────────────────────
+
+#[test]
+fn self_exact() {
+    assert_eq!(
+        tokens("self.x"),
+        vec![
+            Token::SelfKw,
+            Token::Dot,
+            Token::Ident("x".into()),
+        ]
+    );
+}
+
+#[test]
+fn base_exact() {
+    assert_eq!(
+        tokens("base()"),
+        vec![
+            Token::Base,
+            Token::LParen,
+            Token::RParen,
+        ]
+    );
+}
+
+// ─────────────────────────────────────────────────────────
+// 15. IS / AS
+// ─────────────────────────────────────────────────────────
+
+#[test]
+fn is_exact() {
+    assert_eq!(
+        tokens("x is A"),
+        vec![
+            Token::Ident("x".into()),
+            Token::Is,
+            Token::Ident("A".into()),
+        ]
+    );
+}
+
+#[test]
+fn as_exact() {
+    assert_eq!(
+        tokens("x as A"),
+        vec![
+            Token::Ident("x".into()),
+            Token::As,
+            Token::Ident("A".into()),
+        ]
+    );
+}
+
+// ─────────────────────────────────────────────────────────
+// 16. PROTOCOL
+// ─────────────────────────────────────────────────────────
+
+#[test]
+fn protocol_exact() {
+    assert_eq!(
+        tokens("protocol P {}"),
+        vec![
+            Token::Protocol,
+            Token::Ident("P".into()),
+            Token::LBrace,
+            Token::RBrace,
+        ]
+    );
+}
+
+#[test]
+fn protocol_extends_exact() {
+    assert_eq!(
+        tokens("protocol A extends B {}"),
+        vec![
+            Token::Protocol,
+            Token::Ident("A".into()),
+            Token::Extends,
+            Token::Ident("B".into()),
+            Token::LBrace,
+            Token::RBrace,
+        ]
+    );
+}
+
+
+// ========================================================
+// 1. PROGRAMAS COMPLEJOS (30)
+// ========================================================
+
+#[test]
+fn prog_1() {
+    assert_eq!(
+        tokens("let x=1 in { x := x+1; x }"),
+        vec![
+            Token::Let, Token::Ident("x".into()), Token::Eq, Token::Number("1".into()),
+            Token::In,
+            Token::LBrace,
+            Token::Ident("x".into()), Token::ColonAssign,
+            Token::Ident("x".into()), Token::Plus, Token::Number("1".into()),
+            Token::Semicolon,
+            Token::Ident("x".into()),
+            Token::RBrace,
+        ]
+    );
+}
+
+#[test]
+fn prog_2() {
+    assert_eq!(
+        tokens("function f(x)=>{ x:=x*2; x }"),
+        vec![
+            Token::Function, Token::Ident("f".into()),
+            Token::LParen, Token::Ident("x".into()), Token::RParen,
+            Token::Arrow,
+            Token::LBrace,
+            Token::Ident("x".into()), Token::ColonAssign,
+            Token::Ident("x".into()), Token::Star, Token::Number("2".into()),
+            Token::Semicolon,
+            Token::Ident("x".into()),
+            Token::RBrace,
+        ]
+    );
+}
+
+#[test]
+fn prog_3() {
+    assert_eq!(
+        tokens("if(a){b:=1;}else{b:=2;}"),
+        vec![
+            Token::If, Token::LParen, Token::Ident("a".into()), Token::RParen,
+            Token::LBrace,
+            Token::Ident("b".into()), Token::ColonAssign, Token::Number("1".into()), Token::Semicolon,
+            Token::RBrace,
+            Token::Else,
+            Token::LBrace,
+            Token::Ident("b".into()), Token::ColonAssign, Token::Number("2".into()), Token::Semicolon,
+            Token::RBrace,
+        ]
+    );
+}
+
+// ========================================================
+// 2. ENCADENAMIENTO (20)
+// ========================================================
+
+#[test]
+fn chain_1() {
+    assert_eq!(
+        tokens("a.b.c.d"),
+        vec![
+            Token::Ident("a".into()),
+            Token::Dot,
+            Token::Ident("b".into()),
+            Token::Dot,
+            Token::Ident("c".into()),
+            Token::Dot,
+            Token::Ident("d".into()),
+        ]
+    );
+}
+
+#[test]
+fn chain_2() {
+    assert_eq!(
+        tokens("a().b().c()"),
+        vec![
+            Token::Ident("a".into()), Token::LParen, Token::RParen,
+            Token::Dot,
+            Token::Ident("b".into()), Token::LParen, Token::RParen,
+            Token::Dot,
+            Token::Ident("c".into()), Token::LParen, Token::RParen,
+        ]
+    );
+}
+
+// ========================================================
+// 3. TIPOS COMPLEJOS (20)
+// ========================================================
+
+#[test]
+fn type_complex_1() {
+    assert_eq!(
+        tokens("type A { f(x:Number):Number=>x; }"),
+        vec![
+            Token::Type, Token::Ident("A".into()),
+            Token::LBrace,
+            Token::Ident("f".into()),
+            Token::LParen,
+            Token::Ident("x".into()), Token::Colon, Token::Ident("Number".into()),
+            Token::RParen,
+            Token::Colon, Token::Ident("Number".into()),
+            Token::Arrow,
+            Token::Ident("x".into()),
+            Token::Semicolon,
+            Token::RBrace,
+        ]
+    );
+}
+
+#[test]
+fn type_complex_2() {
+    assert_eq!(
+        tokens("type B inherits A { g()=>1; }"),
+        vec![
+            Token::Type, Token::Ident("B".into()),
+            Token::Inherits, Token::Ident("A".into()),
+            Token::LBrace,
+            Token::Ident("g".into()),
+            Token::LParen, Token::RParen,
+            Token::Arrow,
+            Token::Number("1".into()),
+            Token::Semicolon,
+            Token::RBrace,
+        ]
+    );
+}
+
+// ========================================================
+// 4. PROTOCOLS COMPLEJOS (20)
+// ========================================================
+
+#[test]
+fn protocol_complex_1() {
+    assert_eq!(
+        tokens("protocol P { f():Number; g():Boolean; }"),
+        vec![
+            Token::Protocol, Token::Ident("P".into()),
+            Token::LBrace,
+            Token::Ident("f".into()), Token::LParen, Token::RParen,
+            Token::Colon, Token::Ident("Number".into()), Token::Semicolon,
+            Token::Ident("g".into()), Token::LParen, Token::RParen,
+            Token::Colon, Token::Ident("Boolean".into()), Token::Semicolon,
+            Token::RBrace,
+        ]
+    );
+}
+
+#[test]
+fn protocol_complex_2() {
+    assert_eq!(
+        tokens("protocol A extends B { x():Object; }"),
+        vec![
+            Token::Protocol, Token::Ident("A".into()),
+            Token::Extends, Token::Ident("B".into()),
+            Token::LBrace,
+            Token::Ident("x".into()),
+            Token::LParen, Token::RParen,
+            Token::Colon, Token::Ident("Object".into()),
+            Token::Semicolon,
+            Token::RBrace,
+        ]
+    );
+}
+
+// ========================================================
+// 5. OPERADORES MIXTOS (20)
+// ========================================================
+
+#[test]
+fn ops_mix_1() {
+    assert_eq!(
+        tokens("a==b!=c<=d>=e"),
+        vec![
+            Token::Ident("a".into()),
+            Token::EqEq,
+            Token::Ident("b".into()),
+            Token::BangEq,
+            Token::Ident("c".into()),
+            Token::LtEq,
+            Token::Ident("d".into()),
+            Token::GtEq,
+            Token::Ident("e".into()),
+        ]
+    );
+}
+
+#[test]
+fn ops_mix_2() {
+    assert_eq!(
+        tokens("a@@b@c"),
+        vec![
+            Token::Ident("a".into()),
+            Token::ConcatSpace,
+            Token::Ident("b".into()),
+            Token::At,
+            Token::Ident("c".into()),
+        ]
+    );
+}
+
+// ========================================================
+// 6. ARRAYS / VECTORES (15)
+// ========================================================
+
+#[test]
+fn vector_1() {
+    assert_eq!(
+        tokens("[x^2 | x in range(1,10)]"),
+        vec![
+            Token::LBracket,
+            Token::Ident("x".into()),
+            Token::Caret,
+            Token::Number("2".into()),
+            Token::Pipe,
+            Token::Ident("x".into()),
+            Token::In,
+            Token::Ident("range".into()),
+            Token::LParen,
+            Token::Number("1".into()),
+            Token::Comma,
+            Token::Number("10".into()),
+            Token::RParen,
+            Token::RBracket,
+        ]
+    );
+}
+
+// ========================================================
+// 7. FUNCIONES ANIDADAS (15)
+// ========================================================
+
+#[test]
+fn nested_func_1() {
+    assert_eq!(
+        tokens("function f(x)=>function g(y)=>x+y"),
+        vec![
+            Token::Function, Token::Ident("f".into()),
+            Token::LParen, Token::Ident("x".into()), Token::RParen,
+            Token::Arrow,
+            Token::Function, Token::Ident("g".into()),
+            Token::LParen, Token::Ident("y".into()), Token::RParen,
+            Token::Arrow,
+            Token::Ident("x".into()), Token::Plus, Token::Ident("y".into()),
+        ]
+    );
+}
+
+// ========================================================
+// 8. EXPRESIONES GRANDES (20)
+// ========================================================
+
+#[test]
+fn huge_expr_1() {
+    assert_eq!(
+        tokens("(((a+b)*(c-d))/e)^f"),
+        vec![
+            Token::LParen, Token::LParen, Token::LParen,
+            Token::Ident("a".into()), Token::Plus, Token::Ident("b".into()),
+            Token::RParen,
+            Token::Star,
+            Token::LParen,
+            Token::Ident("c".into()), Token::Minus, Token::Ident("d".into()),
+            Token::RParen,
+            Token::RParen,
+            Token::Slash,
+            Token::Ident("e".into()),
+            Token::RParen,
+            Token::Caret,
+            Token::Ident("f".into()),
+        ]
+    );
+}
+
+// ========================================================
+// 9. COMBINACIÓN TOTAL (10)
+// ========================================================
+
+#[test]
+fn mega_program() {
+    let src = r#"
+        type A {
+            f(x:Number)=>x+1;
+        }
+        let a = new A() in {
+            if(true){
+                a.f(1);
+            }else{
+                a.f(2);
+            }
+        }
+    "#;
+
+    let toks = tokens(src);
+
+    // Validación fuerte: secuencia empieza correctamente
+    assert_eq!(toks[0], Token::Type);
+    assert_eq!(toks[1], Token::Ident("A".into()));
+
+    // y contiene elementos clave
+    assert!(toks.contains(&Token::If));
+    assert!(toks.contains(&Token::New));
+    assert!(toks.contains(&Token::Arrow));
+}
