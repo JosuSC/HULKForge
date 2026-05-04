@@ -1188,10 +1188,10 @@ fn function_makeDog() {
 #[test]
 fn math_expression_x() {
     assert_eq!(
-        tokens(r#"let x := 10 + 20 * (3 - 1)"#),
+        tokens("let x = 10 + 20 * (3 - 1) in x"),
         vec![
             Token::Let, Token::Ident("x".into()),
-            Token::ColonAssign,
+            Token::Eq,
             Token::Number("10".into()),
             Token::Plus,
             Token::Number("20".into()),
@@ -1201,6 +1201,8 @@ fn math_expression_x() {
                 Token::Minus,
                 Token::Number("1".into()),
             Token::RParen,
+            Token::In,
+            Token::Ident("x".into()),
         ]
     );
 }
@@ -1248,10 +1250,10 @@ fn function_makeCat() {
 #[test]
 fn math_expr_y() {
     assert_eq!(
-        tokens(r#"let y := (5 * 2) + 7 - 3"#),
+        tokens("let y = (5 * 2) + 7 - 3 in y"),
         vec![
             Token::Let, Token::Ident("y".into()),
-            Token::ColonAssign,
+            Token::Eq,
             Token::LParen,
                 Token::Number("5".into()),
                 Token::Star,
@@ -1261,9 +1263,12 @@ fn math_expr_y() {
             Token::Number("7".into()),
             Token::Minus,
             Token::Number("3".into()),
+            Token::In,
+            Token::Ident("y".into()),
         ]
     );
 }
+
 #[test]
 fn call_method() {
     assert_eq!(
@@ -1302,10 +1307,13 @@ fn not_equal_test() {
 #[test]
 fn block_expression() {
     assert_eq!(
-        tokens(r#"{ let x := 1; x + 2 }"#),
+        tokens("let x = 1 in { x + 2 }"),
         vec![
+            Token::Let, Token::Ident("x".into()),
+            Token::Eq,
+            Token::Number("1".into()),
+            Token::In,
             Token::LBrace,
-                Token::Let, Token::Ident("x".into()), Token::ColonAssign, Token::Number("1".into()), Token::Semicolon,
                 Token::Ident("x".into()), Token::Plus, Token::Number("2".into()),
             Token::RBrace,
         ]
@@ -1327,26 +1335,22 @@ fn nested_blocks() {
         ]
     );
 }
+
 #[test]
 fn for_loop_like() {
     assert_eq!(
-        tokens(r#"
-            for(i := 0; i < 5; i = i + 1){
-                print(i);
-            }
-        "#),
+        tokens("for (i in range(0, 5)) print(i)"),
         vec![
             Token::For, Token::LParen,
-                Token::Ident("i".into()), Token::ColonAssign, Token::Number("0".into()), Token::Semicolon,
-                Token::Ident("i".into()), Token::Lt, Token::Number("5".into()), Token::Semicolon,
-                Token::Ident("i".into()), Token::Eq,
-                Token::Ident("i".into()), Token::Plus, Token::Number("1".into()),
+                Token::Ident("i".into()),
+                Token::In,
+                Token::Ident("range".into()),
+                Token::LParen,
+                    Token::Number("0".into()), Token::Comma, Token::Number("5".into()),
+                Token::RParen,
             Token::RParen,
-            Token::LBrace,
-                Token::Ident("print".into()), Token::LParen,
-                    Token::Ident("i".into()),
-                Token::RParen, Token::Semicolon,
-            Token::RBrace,
+            Token::Ident("print".into()),
+            Token::LParen, Token::Ident("i".into()), Token::RParen,
         ]
     );
 }
@@ -1381,13 +1385,18 @@ fn function_return_bool() {
 
 #[test]
 fn assign_chain() {
+    // en HULK: let b = a := 1 in ...
+    // := retorna el valor asignado, por eso puede encadenarse así
     assert_eq!(
-        tokens(r#"a = b = c = 5"#),
+        tokens("let b = a := 1 in b"),
         vec![
-            Token::Ident("a".into()), Token::Eq,
-            Token::Ident("b".into()), Token::Eq,
-            Token::Ident("c".into()), Token::Eq,
-            Token::Number("5".into()),
+            Token::Let, Token::Ident("b".into()),
+            Token::Eq,
+            Token::Ident("a".into()),
+            Token::ColonAssign,
+            Token::Number("1".into()),
+            Token::In,
+            Token::Ident("b".into()),
         ]
     );
 }
@@ -1395,13 +1404,15 @@ fn assign_chain() {
 #[test]
 fn string_concat() {
     assert_eq!(
-        tokens(r#"let s := "hi" @ " there""#),
+        tokens(r#"let s = "hi" @ " there" in s"#),
         vec![
             Token::Let, Token::Ident("s".into()),
-            Token::ColonAssign,
+            Token::Eq,
             Token::StringLit("hi".into()),
             Token::At,
             Token::StringLit(" there".into()),
+            Token::In,
+            Token::Ident("s".into()),
         ]
     );
 }
@@ -1409,14 +1420,16 @@ fn string_concat() {
 #[test]
 fn new_object_with_args() {
     assert_eq!(
-        tokens(r#"let p := new Point(3,4)"#),
+        tokens("let p = new Point(3,4) in p"),
         vec![
             Token::Let, Token::Ident("p".into()),
-            Token::ColonAssign,
+            Token::Eq,
             Token::New, Token::Ident("Point".into()),
             Token::LParen,
                 Token::Number("3".into()), Token::Comma, Token::Number("4".into()),
             Token::RParen,
+            Token::In,
+            Token::Ident("p".into()),
         ]
     );
 }
@@ -1449,28 +1462,18 @@ fn index_access() {
 }
 
 
-
-
-
-
-
-
-
-
-
-
-
-
 #[test]
 fn boolean_logic_1() {
     assert_eq!(
-        tokens(r#"let ok := true & false"#),
+        tokens("let ok = true & false in ok"),
         vec![
             Token::Let, Token::Ident("ok".into()),
-            Token::ColonAssign,
+            Token::Eq,
             Token::True,
             Token::Amp,
             Token::False,
+            Token::In,
+            Token::Ident("ok".into()),
         ]
     );
 }
@@ -1478,14 +1481,16 @@ fn boolean_logic_1() {
 #[test]
 fn boolean_logic_2() {
     assert_eq!(
-        tokens(r#"let r := !false | true"#),
+        tokens("let r = !false | true in r"),
         vec![
             Token::Let, Token::Ident("r".into()),
-            Token::ColonAssign,
+            Token::Eq,
             Token::Bang,
             Token::False,
             Token::Pipe,
             Token::True,
+            Token::In,
+            Token::Ident("r".into()),
         ]
     );
 }
@@ -1544,13 +1549,13 @@ fn while_loop_simple() {
         ]
     );
 }
+
 #[test]
 fn function_distance() {
     assert_eq!(
         tokens(r#"
             function distance(x:Number, y:Number) => {
-                let d := x * x + y * y;
-                d
+                let d = x * x + y * y in d
             }
         "#),
         vec![
@@ -1562,14 +1567,311 @@ fn function_distance() {
             Token::Arrow,
             Token::LBrace,
                 Token::Let, Token::Ident("d".into()),
-                Token::ColonAssign,
+                Token::Eq,
                 Token::Ident("x".into()), Token::Star, Token::Ident("x".into()),
                 Token::Plus,
                 Token::Ident("y".into()), Token::Star, Token::Ident("y".into()),
-                Token::Semicolon,
-
+                Token::In,
                 Token::Ident("d".into()),
             Token::RBrace,
         ]
+    );
+}
+
+#[test]
+fn percent_operator() {
+    assert_eq!(
+        tokens("a % b"),
+        vec![
+            Token::Ident("a".into()),
+            Token::Percent,
+            Token::Ident("b".into()),
+        ]
+    );
+}
+
+#[test]
+fn percent_in_expression() {
+    // caso real de HULK: módulo en condicional
+    assert_eq!(
+        tokens("if (a % 2 == 0) \"even\" else \"odd\""),
+        vec![
+            Token::If,
+            Token::LParen,
+            Token::Ident("a".into()),
+            Token::Percent,
+            Token::Number("2".into()),
+            Token::EqEq,
+            Token::Number("0".into()),
+            Token::RParen,
+            Token::StringLit("even".into()),
+            Token::Else,
+            Token::StringLit("odd".into()),
+        ]
+    );
+}
+
+#[test]
+fn dollar_placeholder() {
+    // $iter es un variable placeholder en macros (sección A.14.4)
+    assert_eq!(
+        tokens("$iter"),
+        vec![
+            Token::Dollar,
+            Token::Ident("iter".into()),
+        ]
+    );
+}
+
+#[test]
+fn dollar_in_macro_def() {
+    // def repeat($iter: Number, n: Number, *expr: Object)
+    assert_eq!(
+        tokens("def repeat($iter: Number, n: Number)"),
+        vec![
+            Token::Def,
+            Token::Ident("repeat".into()),
+            Token::LParen,
+            Token::Dollar,
+            Token::Ident("iter".into()),
+            Token::Colon,
+            Token::Ident("Number".into()),
+            Token::Comma,
+            Token::Ident("n".into()),
+            Token::Colon,
+            Token::Ident("Number".into()),
+            Token::RParen,
+        ]
+    );
+}
+
+#[test]
+fn def_keyword() {
+    assert_eq!(
+        tokens("def repeat(n: Number)"),
+        vec![
+            Token::Def,
+            Token::Ident("repeat".into()),
+            Token::LParen,
+            Token::Ident("n".into()),
+            Token::Colon,
+            Token::Ident("Number".into()),
+            Token::RParen,
+        ]
+    );
+}
+
+#[test]
+fn def_with_star_arg() {
+    // *expr es argumento de bloque en macros (sección A.14.1)
+    assert_eq!(
+        tokens("def repeat(n: Number, *expr: Object)"),
+        vec![
+            Token::Def,
+            Token::Ident("repeat".into()),
+            Token::LParen,
+            Token::Ident("n".into()),
+            Token::Colon,
+            Token::Ident("Number".into()),
+            Token::Comma,
+            Token::Star,
+            Token::Ident("expr".into()),
+            Token::Colon,
+            Token::Ident("Object".into()),
+            Token::RParen,
+        ]
+    );
+}
+
+#[test]
+fn def_is_not_ident() {
+    // "def" no debe tokenizarse como Ident
+    let toks = tokens("def");
+    assert_eq!(toks, vec![Token::Def]);
+    assert_ne!(toks, vec![Token::Ident("def".into())]);
+}
+
+#[test]
+fn thin_arrow_exact() {
+    assert_eq!(
+        tokens("(Number) -> Boolean"),
+        vec![
+            Token::LParen,
+            Token::Ident("Number".into()),
+            Token::RParen,
+            Token::ThinArrow,
+            Token::Ident("Boolean".into()),
+        ]
+    );
+}
+
+#[test]
+fn thin_arrow_vs_minus_gt() {
+    // -> es ThinArrow, no Minus + Gt
+    assert_eq!(tokens("->"),  vec![Token::ThinArrow]);
+    assert_eq!(tokens("- >"), vec![Token::Minus, Token::Gt]);
+}
+
+#[test]
+fn thin_arrow_in_functor_annotation() {
+    // función que recibe un functor (Number) -> Boolean
+    assert_eq!(
+        tokens("function f(filter: (Number) -> Boolean)"),
+        vec![
+            Token::Function,
+            Token::Ident("f".into()),
+            Token::LParen,
+            Token::Ident("filter".into()),
+            Token::Colon,
+            Token::LParen,
+            Token::Ident("Number".into()),
+            Token::RParen,
+            Token::ThinArrow,
+            Token::Ident("Boolean".into()),
+            Token::RParen,
+        ]
+    );
+}
+
+#[test]
+fn elif_exact() {
+    assert_eq!(
+        tokens("if (a) 1 elif (b) 2 else 3"),
+        vec![
+            Token::If,
+            Token::LParen,
+            Token::Ident("a".into()),
+            Token::RParen,
+            Token::Number("1".into()),
+            Token::Elif,
+            Token::LParen,
+            Token::Ident("b".into()),
+            Token::RParen,
+            Token::Number("2".into()),
+            Token::Else,
+            Token::Number("3".into()),
+        ]
+    );
+}
+
+#[test]
+fn elif_is_not_ident() {
+    // "elif" no debe tokenizarse como Ident
+    let toks = tokens("elif");
+    assert_eq!(toks, vec![Token::Elif]);
+    assert_ne!(toks, vec![Token::Ident("elif".into())]);
+}
+
+#[test]
+fn elif_chained() {
+    // múltiples elif encadenados
+    assert_eq!(
+        tokens("if (a) 1 elif (b) 2 elif (c) 3 else 4"),
+        vec![
+            Token::If,
+            Token::LParen, Token::Ident("a".into()), Token::RParen,
+            Token::Number("1".into()),
+            Token::Elif,
+            Token::LParen, Token::Ident("b".into()), Token::RParen,
+            Token::Number("2".into()),
+            Token::Elif,
+            Token::LParen, Token::Ident("c".into()), Token::RParen,
+            Token::Number("3".into()),
+            Token::Else,
+            Token::Number("4".into()),
+        ]
+    );
+}
+
+#[test]
+fn string_empty() {
+    assert_eq!(
+        tokens(r#""""#),
+        vec![Token::StringLit("".into())]
+    );
+}
+
+#[test]
+fn string_empty_concat() {
+    // string vacío concatenado tiene sentido en HULK
+    assert_eq!(
+        tokens(r#""" @ "hello""#),
+        vec![
+            Token::StringLit("".into()),
+            Token::At,
+            Token::StringLit("hello".into()),
+        ]
+    );
+}
+
+#[test]
+fn string_escape_backslash() {
+    // "\\" debe producir un solo backslash en el string
+    let toks = tokens(r#""path\\file""#);
+    assert_eq!(toks, vec![Token::StringLit("path\\file".into())]);
+}
+
+#[test]
+fn string_all_escapes() {
+    // todos los escapes válidos en un solo string
+    let toks = tokens(r#""\n\t\\\"""#);
+    assert_eq!(toks, vec![Token::StringLit("\n\t\\\"".into())]);
+}
+
+#[test]
+fn string_unknown_escape_preserved() {
+    // escape desconocido se preserva literalmente: \z → \z
+    let toks = tokens(r#""\z""#);
+    assert_eq!(toks, vec![Token::StringLit("\\z".into())]);
+}
+
+#[test]
+fn number_zero() {
+    assert_eq!(
+        tokens("0"),
+        vec![Token::Number("0".into())]
+    );
+}
+
+#[test]
+fn number_zero_float() {
+    assert_eq!(
+        tokens("0.0"),
+        vec![Token::Number("0.0".into())]
+    );
+}
+
+#[test]
+fn number_zero_point_something() {
+    assert_eq!(
+        tokens("0.5"),
+        vec![Token::Number("0.5".into())]
+    );
+}
+
+#[test]
+fn number_large() {
+    // el lexer guarda el string — no hay overflow aquí
+    assert_eq!(
+        tokens("999999999"),
+        vec![Token::Number("999999999".into())]
+    );
+}
+
+#[test]
+fn number_very_large() {
+    // número que desbordaría f64 — el lexer lo acepta como string
+    // el parser/semántico decide qué hacer con él
+    assert_eq!(
+        tokens("99999999999999999999999999999999"),
+        vec![Token::Number("99999999999999999999999999999999".into())]
+    );
+}
+
+#[test]
+fn number_large_float() {
+    assert_eq!(
+        tokens("123456789.987654321"),
+        vec![Token::Number("123456789.987654321".into())]
     );
 }
