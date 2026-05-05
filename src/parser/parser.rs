@@ -88,7 +88,7 @@ impl<'src> Parser<'src> {
     // Matching por "tipo" (clave para tokens con datos)
     // ─────────────────────────────────────────────────────────────────────────
 
-    /// Verifica por patrón (ej: Number(_))
+    /// Verifica por patrón 
     pub fn check_kind(&self, f: fn(&Token) -> bool) -> bool {
         f(&self.current.token)
     }
@@ -142,39 +142,5 @@ impl<'src> Parser<'src> {
         let span = self.current.span;
         let full = format!("[ParseError {}] {}", span, msg);
         self.errors.push(full);
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // Ejemplo mínimo de parsing
-    // ─────────────────────────────────────────────────────────────────────────
-
-    /// Parsea un número
-    pub fn parse_number(&mut self) {
-        match &self.current.token {
-            Token::Number(n) => {
-                println!("Número: {}", n);
-                self.advance();
-            }
-            _ => self.error("Se esperaba un número"),
-        }
-    }
-
-    /// Parsea expresión simple: Number (+ Number)?
-    pub fn parse_expression(&mut self) {
-        self.parse_number();
-
-        if self.matches(&Token::Plus) {
-            self.parse_number();
-        }
-    }
-
-    /// Entry point de prueba
-    pub fn parse(&mut self) {
-        while !self.is_at_end() {
-            self.parse_expression();
-
-            // opcional: consumir ;
-            self.matches(&Token::Semicolon);
-        }
     }
 }
