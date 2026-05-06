@@ -118,6 +118,17 @@ pub enum Token {
     #[token("extends")]  Extends,
     #[token("def")]      Def,       // macros (sección A.14)
 
+    // ── Builtins matemáticos ───────────────────────────────────────────────
+
+    #[token("sqrt")]     Sqrt,
+    #[token("sin")]      Sin,
+    #[token("cos")]      Cos,
+    #[token("exp")]      Exp,
+    #[token("log")]      Log,
+    #[token("rand")]     Rand,
+    #[token("PI", priority = 3)] Pi,
+    #[token("E", priority = 3)]  E,
+
     // ── Literales ─────────────────────────────────────────────────────────────
 
     /// Número: entero o flotante.

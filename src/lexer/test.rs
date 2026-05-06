@@ -423,9 +423,9 @@ fn builtin_call_exact() {
     assert_eq!(
         tokens("sin(PI)"),
         vec![
-            Token::Ident("sin".into()),
+            Token::Sin,
             Token::LParen,
-            Token::Ident("PI".into()),
+            Token::Pi,
             Token::RParen,
         ]
     );
@@ -436,12 +436,41 @@ fn log_call_exact() {
     assert_eq!(
         tokens("log(2, 8)"),
         vec![
-            Token::Ident("log".into()),
+            Token::Log,
             Token::LParen,
             Token::Number("2".into()),
             Token::Comma,
             Token::Number("8".into()),
             Token::RParen,
+        ]
+    );
+}
+
+#[test]
+fn builtin_math_extra_exact() {
+    assert_eq!(
+        tokens("sqrt(4) + cos(0) + exp(1) + rand() + E"),
+        vec![
+            Token::Sqrt,
+            Token::LParen,
+            Token::Number("4".into()),
+            Token::RParen,
+            Token::Plus,
+            Token::Cos,
+            Token::LParen,
+            Token::Number("0".into()),
+            Token::RParen,
+            Token::Plus,
+            Token::Exp,
+            Token::LParen,
+            Token::Number("1".into()),
+            Token::RParen,
+            Token::Plus,
+            Token::Rand,
+            Token::LParen,
+            Token::RParen,
+            Token::Plus,
+            Token::E,
         ]
     );
 }
