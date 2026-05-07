@@ -64,8 +64,7 @@ fn print_factor(f: &Factor, indent: usize) {
 	}
 }
 
-fn test_expression_example() {
-	let src = "sin(2 * PI) ^ 2 + cos(3 * PI / log(4, 64))";
+fn test_expression_example(src: &str) {
 	println!("=== PRUEBA 1: Expresión Matemática ===");
 	println!("Fuente: {}", src);
 
@@ -166,44 +165,9 @@ fn test_function_definition() {
 	}
 }
 
-fn test_simple_case() {
-	let src = "2*(3+a)";
-	println!("\n=== PRUEBA 3: Caso Simple ===");
-	println!("Fuente: {}", src);
-
-	// Tokenización (muestra tokens y errores léxicos)
-	let (tokens, lex_errors) = TokenStream::tokenize_all(src);
-	println!("\nTokens:");
-	for t in &tokens {
-		println!("  {:?} -> {}", t.token, t.span);
-	}
-	if !lex_errors.is_empty() {
-		println!("\nErrores léxicos:");
-		for e in &lex_errors {
-			println!("  {}", e);
-		}
-	}
-
-	// Parseo usando el parser
-	let ts = TokenStream::new(src);
-	let mut parser = Parser::new(ts);
-	match parser.parse_expr() {
-		Some(expr) => {
-			println!("\nÁrbol AST:");
-			print_expression(&expr, 0);
-		}
-		None => {
-			println!("\nError al parsear. Errores:");
-			for e in parser.errors {
-				println!("  {}", e);
-			}
-		}
-	}
-}
-
 fn main() {
-	//test_expression_example();
+	//test_expression_example("sin(2 * PI) ^ 2 + cos(3 * PI / log(4, 64))");
+	//test_expression_example("2*(3+4)")
 	test_function_definition();
-	//test_simple_case();
 }
 
