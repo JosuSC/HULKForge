@@ -1,5 +1,5 @@
 use crate::lexer::lexer::{Token, SpannedToken, TokenStream};
-use crate::parser::ast::{BinaryOp, BuiltinFn, ConstValue, Expression, Factor, Term};
+use crate::parser::ast::{BinaryOp, BuiltinFn, ConstValue, Expression, Factor, FunctionBody, FunctionDef, FunctionParam, Term};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Parser
@@ -137,6 +137,136 @@ impl<'src> Parser<'src> {
         self.errors.push(full);
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // Parsing de funciones
+    // ─────────────────────────────────────────────────────────────────────────
+
+    pub fn parse_function(&mut self) -> Option<FunctionDef> {
+        self.expect(&Token::Function, "se esperaba 'function'")?;
+
+        let name = self.parse_identifier("se esperaba el nombre de la funcion")?;
+        let params = self.parse_function_params()?;
+
+        let body = if self.matches(&Token::Arrow) {
+            self.parse_function_inline_body()?
+        } else if self.check(&Token::LBrace) {
+            self.parse_function_block_body()?
+        } else {
+            self.error("se esperaba '=>' o '{' en el cuerpo de la funcion");
+            return None;
+        };
+
+        Some(FunctionDef { name, params, body })
+    }
+
+    fn parse_function_params(&mut self) -> Option<Vec<FunctionParam>> {
+        self.expect(&Token::LParen, "se esperaba '(' despues del nombre de la funcion")?;
+
+        let mut params = Vec::new();
+        if !self.check(&Token::RParen) {
+            loop {
+                params.push(self.parse_function_param()?);
+
+                if self.matches(&Token::Comma) {
+                    continue;
+                }
+
+                break;
+            }
+        }
+
+        self.expect(&Token::RParen, "se esperaba ')' al cerrar la lista de parametros")?;
+        Some(params)
+    }
+
+    fn parse_function_param(&mut self) -> Option<FunctionParam> {
+        let name = self.parse_identifier("se esperaba un nombre de parametro")?;
+        let ty = if self.matches(&Token::Colon) {
+            Some(self.parse_type_name("se esperaba un tipo de parametro")?)
+        } else {
+            None
+        };
+
+        Some(FunctionParam { name, ty })
+    }
+
+    fn parse_function_inline_body(&mut self) -> Option<FunctionBody> {
+        let expr = self.parse_expr()?;
+        self.expect(&Token::Semicolon, "se esperaba ';' al final del cuerpo inline")?;
+        Some(FunctionBody::Inline(expr))
+    }
+
+    fn parse_function_block_body(&mut self) -> Option<FunctionBody> {
+        self.expect(&Token::LBrace, "se esperaba '{' para abrir el cuerpo de la funcion")?;
+
+        let mut expressions = Vec::new();
+        if self.check(&Token::RBrace) {
+            self.error("el cuerpo de la funcion no puede estar vacio");
+            return None;
+        }
+
+        loop {
+            let expr = self.parse_expr()?;
+            expressions.push(expr);
+
+            if self.matches(&Token::Semicolon) {
+                if self.check(&Token::RBrace) {
+                    break;
+                }
+                continue;
+            }
+
+            break;
+        }
+
+        self.expect(&Token::RBrace, "se esperaba '}' al cerrar el cuerpo de la funcion")?;
+        Some(FunctionBody::Block(expressions))
+    }
+
+    fn parse_identifier(&mut self, msg: &str) -> Option<SpannedToken> {
+        match self.peek() {
+            Token::Ident(_) | Token::InternalIdent(_) => {
+                let tok = self.current.clone();
+                self.advance();
+                Some(tok)
+            }
+            _ => {
+                self.error(msg);
+                None
+            }
+        }
+    }
+
+    fn parse_type_name(&mut self, msg: &str) -> Option<SpannedToken> {
+        match self.peek() {
+            Token::Ident(name) | Token::InternalIdent(name) => {
+                let _ = name;
+                let tok = self.current.clone();
+                self.advance();
+                Some(tok)
+            }
+            Token::TypNumber => {
+                let tok = self.current.clone();
+                self.advance();
+                Some(tok)
+            }
+            Token::TypString => {
+                let tok = self.current.clone();
+                self.advance();
+                Some(tok)
+            }
+            Token::TypBool => {
+                let tok = self.current.clone();
+                self.advance();
+                Some(tok)
+            }
+            _ => {
+                self.error(msg);
+                None
+            }
+        }
+    }
+
 
     // ─────────────────────────────────────────────────────────────────────────
     // Parsing de expresiones
@@ -181,6 +311,12 @@ impl<'src> Parser<'src> {
                 let value = value.clone();
                 self.advance();
                 Factor::Number(value)
+            }
+
+            Token::Ident(name) | Token::InternalIdent(name) => {
+                let name = name.clone();
+                self.advance();
+                Factor::Ident(name)
             }
 
             Token::LParen => {
@@ -276,5 +412,45 @@ impl<'src> Parser<'src> {
             Token::Caret => Some(BinaryOp::Pow),
             _ => None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::parser::ast::FunctionBody;
+
+    fn parse_function(src: &str) -> (Parser<'_>, Option<FunctionDef>) {
+        let ts = TokenStream::new(src);
+        let mut parser = Parser::new(ts);
+        let function = parser.parse_function();
+        (parser, function)
+    }
+
+    #[test]
+    fn parses_inline_function_body() {
+        let (parser, function) = parse_function("function suma(x, y) => x + y;");
+        assert!(parser.errors.is_empty(), "errores: {:?}", parser.errors);
+
+        let function = function.expect("debe parsear una funcion inline");
+        assert!(matches!(function.name.token, Token::Ident(ref name) if name == "suma"));
+        assert_eq!(function.params.len(), 2);
+        assert!(matches!(function.body, FunctionBody::Inline(_)));
+    }
+
+    #[test]
+    fn parses_block_function_body() {
+        let (parser, function) = parse_function("function suma(x, y) { x + y; x }");
+        assert!(parser.errors.is_empty(), "errores: {:?}", parser.errors);
+
+        let function = function.expect("debe parsear una funcion con bloque");
+        assert!(matches!(function.body, FunctionBody::Block(ref exprs) if exprs.len() == 2));
+    }
+
+    #[test]
+    fn rejects_block_after_arrow() {
+        let (parser, function) = parse_function("function suma(x, y) => { x + y };");
+        assert!(function.is_none());
+        assert!(!parser.errors.is_empty());
     }
 }

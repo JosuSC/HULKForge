@@ -36,6 +36,15 @@ fn keywords() {
     ]);
 }
 
+#[test]
+fn builtin_type_names() {
+    assert_eq!(
+        tokens("Number String Boolean"),
+        vec![Token::TypNumber, Token::TypString, Token::TypBool]
+    );
+}
+
+
 // ── EOF ───────────────────────────────────────────────────────────────────
 
 #[test]
@@ -895,9 +904,9 @@ fn type_complex_1() {
             Token::LBrace,
             Token::Ident("f".into()),
             Token::LParen,
-            Token::Ident("x".into()), Token::Colon, Token::Ident("Number".into()),
+            Token::Ident("x".into()), Token::Colon, Token::TypNumber,
             Token::RParen,
-            Token::Colon, Token::Ident("Number".into()),
+            Token::Colon, Token::TypNumber,
             Token::Arrow,
             Token::Ident("x".into()),
             Token::Semicolon,
@@ -936,9 +945,9 @@ fn protocol_complex_1() {
             Token::Protocol, Token::Ident("P".into()),
             Token::LBrace,
             Token::Ident("f".into()), Token::LParen, Token::RParen,
-            Token::Colon, Token::Ident("Number".into()), Token::Semicolon,
+            Token::Colon, Token::TypNumber, Token::Semicolon,
             Token::Ident("g".into()), Token::LParen, Token::RParen,
-            Token::Colon, Token::Ident("Boolean".into()), Token::Semicolon,
+            Token::Colon, Token::TypBool, Token::Semicolon,
             Token::RBrace,
         ]
     );
@@ -1109,7 +1118,7 @@ fn type_A_definition() {
             Token::LBrace,
                 Token::Ident("f".into()),
                 Token::LParen, Token::Ident("x".into()),
-                Token::Colon, Token::Ident("Number".into()),
+                Token::Colon, Token::TypNumber,
                 Token::RParen,
                 Token::Arrow,
                 Token::Ident("x".into()),
@@ -1158,14 +1167,14 @@ fn type_animal_and_dog() {
         vec![
             Token::Type, Token::Ident("Animal".into()),
             Token::LBrace,
-                Token::Ident("name".into()), Token::Colon, Token::Ident("String".into()), Token::Comma,
-                Token::Ident("age".into()), Token::Colon, Token::Ident("Number".into()),
+                Token::Ident("name".into()), Token::Colon, Token::TypString, Token::Comma,
+                Token::Ident("age".into()), Token::Colon, Token::TypNumber,
             Token::RBrace,
 
             Token::Type, Token::Ident("Dog".into()),
             Token::Inherits, Token::Ident("Animal".into()),
             Token::LBrace,
-                Token::Ident("breed".into()), Token::Colon, Token::Ident("String".into()),
+                Token::Ident("breed".into()), Token::Colon, Token::TypString,
             Token::RBrace,
         ]
     );
@@ -1186,8 +1195,8 @@ fn function_makeDog() {
         vec![
             Token::Function, Token::Ident("makeDog".into()),
             Token::LParen,
-                Token::Ident("n".into()), Token::Colon, Token::Ident("String".into()), Token::Comma,
-                Token::Ident("b".into()), Token::Colon, Token::Ident("String".into()),
+                Token::Ident("n".into()), Token::Colon, Token::TypString, Token::Comma,
+                Token::Ident("b".into()), Token::Colon, Token::TypString,
             Token::RParen,
             Token::Arrow,
             Token::LBrace,
@@ -1251,8 +1260,8 @@ fn function_makeCat() {
         vec![
             Token::Function, Token::Ident("makeCat".into()),
             Token::LParen,
-                Token::Ident("n".into()), Token::Colon, Token::Ident("String".into()), Token::Comma,
-                Token::Ident("c".into()), Token::Colon, Token::Ident("String".into()),
+                Token::Ident("n".into()), Token::Colon, Token::TypString, Token::Comma,
+                Token::Ident("c".into()), Token::Colon, Token::TypString,
             Token::RParen,
             Token::Arrow,
             Token::LBrace,
@@ -1404,7 +1413,7 @@ fn function_return_bool() {
         vec![
             Token::Function, Token::Ident("isZero".into()),
             Token::LParen,
-                Token::Ident("n".into()), Token::Colon, Token::Ident("Number".into()),
+                Token::Ident("n".into()), Token::Colon, Token::TypNumber,
             Token::RParen,
             Token::Arrow,
             Token::Ident("n".into()), Token::EqEq, Token::Number("0".into()),
@@ -1590,8 +1599,8 @@ fn function_distance() {
         vec![
             Token::Function, Token::Ident("distance".into()),
             Token::LParen,
-                Token::Ident("x".into()), Token::Colon, Token::Ident("Number".into()), Token::Comma,
-                Token::Ident("y".into()), Token::Colon, Token::Ident("Number".into()),
+                Token::Ident("x".into()), Token::Colon, Token::TypNumber, Token::Comma,
+                Token::Ident("y".into()), Token::Colon, Token::TypNumber,
             Token::RParen,
             Token::Arrow,
             Token::LBrace,
@@ -1664,11 +1673,11 @@ fn dollar_in_macro_def() {
             Token::Dollar,
             Token::Ident("iter".into()),
             Token::Colon,
-            Token::Ident("Number".into()),
+            Token::TypNumber,
             Token::Comma,
             Token::Ident("n".into()),
             Token::Colon,
-            Token::Ident("Number".into()),
+            Token::TypNumber,
             Token::RParen,
         ]
     );
@@ -1684,7 +1693,7 @@ fn def_keyword() {
             Token::LParen,
             Token::Ident("n".into()),
             Token::Colon,
-            Token::Ident("Number".into()),
+            Token::TypNumber,
             Token::RParen,
         ]
     );
@@ -1701,7 +1710,7 @@ fn def_with_star_arg() {
             Token::LParen,
             Token::Ident("n".into()),
             Token::Colon,
-            Token::Ident("Number".into()),
+            Token::TypNumber,
             Token::Comma,
             Token::Star,
             Token::Ident("expr".into()),
@@ -1726,10 +1735,10 @@ fn thin_arrow_exact() {
         tokens("(Number) -> Boolean"),
         vec![
             Token::LParen,
-            Token::Ident("Number".into()),
+            Token::TypNumber,
             Token::RParen,
             Token::ThinArrow,
-            Token::Ident("Boolean".into()),
+            Token::TypBool,
         ]
     );
 }
@@ -1753,10 +1762,10 @@ fn thin_arrow_in_functor_annotation() {
             Token::Ident("filter".into()),
             Token::Colon,
             Token::LParen,
-            Token::Ident("Number".into()),
+            Token::TypNumber,
             Token::RParen,
             Token::ThinArrow,
-            Token::Ident("Boolean".into()),
+            Token::TypBool,
             Token::RParen,
         ]
     );

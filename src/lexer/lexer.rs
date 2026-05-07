@@ -128,6 +128,9 @@ pub enum Token {
     #[token("rand")]     Rand,
     #[token("PI", priority = 3)] Pi,
     #[token("E", priority = 3)]  E,
+    #[token("Number", priority = 3)]  TypNumber,
+    #[token("String", priority = 3)]  TypString,
+    #[token("Boolean", priority = 3)] TypBool,
 
     // ── Literales ─────────────────────────────────────────────────────────────
 
@@ -260,7 +263,7 @@ impl std::error::Error for LexError {}
 // Token con posición
 // ─────────────────────────────────────────────────────────────────────────────
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SpannedToken {
     pub token: Token,
     pub span: Span,

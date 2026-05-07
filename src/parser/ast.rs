@@ -1,3 +1,5 @@
+use crate::lexer::lexer::SpannedToken;
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expression {
     Term(Term),
@@ -37,6 +39,25 @@ pub enum Factor {
         args: Vec<Expression>,
     },
     Const(ConstValue),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct FunctionParam {
+    pub name: SpannedToken,
+    pub ty: Option<SpannedToken>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum FunctionBody {
+    Inline(Expression),
+    Block(Vec<Expression>),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct FunctionDef {
+    pub name: SpannedToken,
+    pub params: Vec<FunctionParam>,
+    pub body: FunctionBody,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
