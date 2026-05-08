@@ -2,7 +2,7 @@ mod lexer;
 mod parser;
 
 use crate::lexer::lexer::TokenStream;
-use crate::parser::{Parser, Expression, Term, Factor, FunctionDef, FunctionBody};
+use crate::parser::{Parser, Expression, Term, Factor, FunctionDef, FunctionBody, Statement};
 
 fn print_expression(expr: &Expression, indent: usize) {
 	let pad = " ".repeat(indent);
@@ -181,9 +181,68 @@ fn test_function_definition() {
 	}
 }
 
+fn test_let_in() {
+	let src = "let a = 1, b = 2 in a + b;";
+	println!("\n=== PRUEBA 3: Let-In ===");
+	println!("Fuente: {}", src);
+
+	// Tokenización (muestra tokens y errores léxicos)
+	let (tokens, lex_errors) = TokenStream::tokenize_all(src);
+	println!("\nTokens:");
+	for t in &tokens {
+		println!("  {:?} -> {}", t.token, t.span);
+	}
+	if !lex_errors.is_empty() {
+		println!("\nErrores léxicos:");
+		for e in &lex_errors {
+			println!("  {}", e);
+		}
+	}
+
+	// Parseo usando el parser (usamos parse_let para manejar la sentencia let-in)
+	let ts = TokenStream::new(src);
+	let mut parser = Parser::new(ts);
+	match parser.parse_let() {
+		Some(stmt) => {
+			println!("\nÁrbol AST:");
+			print_statement(&stmt, 0);
+		}
+		None => {
+			println!("\nError al parsear. Errores:");
+			for e in parser.errors {
+				println!("  {}", e);
+			}
+		}
+	}
+}
+
+fn print_statement(stmt: &Statement, indent: usize) {
+	let pad = " ".repeat(indent);
+	match stmt {
+		Statement::Assign { assignments, body } => {
+			println!("{}Statement::Assign", pad);
+			println!("{}  Assignments:", pad);
+			for (name_tok, expr) in assignments {
+				// extraer nombre
+				if let crate::lexer::lexer::Token::Ident(n) = &name_tok.token {
+					println!("{}    - {}:", pad, n);
+				} else if let crate::lexer::lexer::Token::InternalIdent(n) = &name_tok.token {
+					println!("{}    - {}:", pad, n);
+				} else {
+					println!("{}    - {:?}:", pad, name_tok.token);
+				}
+				print_expression(expr, indent + 6);
+			}
+			println!("{}  Body:", pad);
+			print_expression(body, indent + 4);
+		}
+	}
+}
+
 fn main() {
-	test_expression_example("sin(2 * PI) ^ 2 + cos(3 * PI / log(4, 64))");
-	test_expression_example("2*(3+4)");
-	test_function_definition();
+	//test_expression_example("sin(2 * PI) ^ 2 + cos(3 * PI / log(4, 64))");
+	//test_expression_example("2*(3+4)");
+	//test_function_definition();
+	test_let_in();
 }
 

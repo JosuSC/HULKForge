@@ -1,5 +1,6 @@
 use crate::lexer::lexer::{Token, SpannedToken, TokenStream};
-use crate::parser::ast::{BinaryOp, BuiltinFn, ConstValue, Expression, Factor, FunctionBody, FunctionDef, FunctionParam, Term};
+use crate::parser::ast::{BinaryOp, BuiltinFn, ConstValue, Expression, Factor, FunctionBody, FunctionDef, FunctionParam, Statement, Term};
+use std::collections::HashMap;
 
 
 // ---------------------------------------------
@@ -293,6 +294,41 @@ impl<'src> Parser<'src> {
         }
 
         Some(left)
+    }
+
+    /// Parse a let statement: let x = expr, y = expr in body_expr
+    pub fn parse_let(&mut self) -> Option<Statement> {
+        self.expect(&Token::Let, "se esperaba 'let'")?;
+
+        // Parse assignments: x = expr, y = expr, ...
+        let mut assignments = HashMap::new();
+
+        loop {
+            let name = self.parse_identifier("se esperaba nombre de variable en asignación")?;
+            self.expect(&Token::Eq, "se esperaba '=' en asignación")?;
+            let expr = self.parse_expr()?;
+
+            assignments.insert(name, expr);
+
+            if self.matches(&Token::Comma) {
+                continue;
+            }
+
+            break;
+        }
+
+        // Expect 'in'
+        self.expect(&Token::In, "se esperaba 'in' después de las asignaciones")?;
+
+        // Parse body expression
+        let body = Box::new(self.parse_expr()?);
+
+        let _ = self.matches(&Token::Semicolon);
+
+        Some(Statement::Assign {
+            assignments,
+            body,
+        })
     }
 
     /// Parse a term, which is a factor or a multiplication/division of factors.

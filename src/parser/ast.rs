@@ -1,4 +1,19 @@
 use crate::lexer::lexer::SpannedToken;
+use std::collections::HashMap;
+
+
+// ---------------------------------------------
+// STATEMENT (ASSIGNMENT)
+// ---------------------------------------------
+
+/// The abstract syntax tree (AST) for the HULKForge language, representing statements, expressions, terms, factors, binary operations, built-in functions, constants, and function definitions.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Statement {
+    Assign {
+        assignments: HashMap<SpannedToken, Expression>,
+        body: Box<Expression>,
+    },
+}
 
 // ---------------------------------------------
 // ARITHMETIC 

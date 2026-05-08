@@ -7,7 +7,7 @@ use logos::{Logos, SpannedIter};
 // ---------------------------------------------
 
 /// Position in the source code. Both values are 1-based.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct Pos {
     pub line: usize,
     pub col: usize,
@@ -20,7 +20,7 @@ impl std::fmt::Display for Pos {
 }
 
 /// Span of a token: start and end position in the source.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct Span {
     pub start: Pos,
     pub end: Pos,
@@ -92,7 +92,7 @@ impl LineIndex {
 // TOKENS FOR THE HULK LANGUAGE
 // ---------------------------------------------
 
-#[derive(Logos, Debug, Clone, PartialEq)]
+#[derive(Logos, Debug, Clone, PartialEq, Eq, Hash)]
 #[logos(skip r"[ \t\r\n]+")]  // Skip whitespace.
 #[logos(skip r"//[^\n]*")]    // Skip line comments.
 pub enum Token {
@@ -282,7 +282,7 @@ impl std::error::Error for LexError {}
 // SPANNED TOKEN
 // ---------------------------------------------
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SpannedToken {
     pub token: Token,
     pub span: Span,
