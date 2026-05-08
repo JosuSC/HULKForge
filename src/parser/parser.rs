@@ -1,5 +1,5 @@
 use crate::lexer::lexer::{Token, SpannedToken, TokenStream};
-use crate::parser::ast::{BinaryOp, BuiltinFn, ConstValue, Expression, Factor, FunctionBody, FunctionDef, FunctionParam, Statement, Term};
+use crate::parser::ast::{BinaryOp, BuiltinFn, ConstValue, Expression, Factor, FunctionBody, FunctionDef, FunctionParam, Statement, Term, UnaryOp};
 use std::collections::HashMap;
 
 
@@ -135,6 +135,23 @@ impl<'src> Parser<'src> {
         let span = self.current.span;
         let full = format!("[ParseError {}] {}", span, msg);
         self.errors.push(full);
+    }
+
+    /// Synchronize to a safe point for error recovery (panic-mode).
+    /// Skips tokens until a likely statement/declaration boundary is found.
+    fn synchronize(&mut self) {
+        self.advance();
+        while !self.is_at_end() {
+            match self.peek() {
+                // Recovery points: semicolon, closing brace, EOF, or start of new statement/declaration
+                Token::Semicolon | Token::RBrace | Token::Eof | Token::Function | Token::Let => {
+                    break;
+                }
+                _ => {
+                    self.advance();
+                }
+            }
+        }
     }
 
     // ---------------------------------------------
@@ -279,18 +296,19 @@ impl<'src> Parser<'src> {
     // Expression parsing
     // ---------------------------------------------
 
-    /// Parse an expression with correct operator precedence.
+    /// Parse an expression with correct operator precedence (left-associative for +/-).
     pub fn parse_expr(&mut self) -> Option<Expression> {
-        let left = Expression::Term(self.parse_term()?);
+        let mut left = Expression::Term(self.parse_term()?);
 
-        if let Some(op_tok) = self.match_any(&[Token::Plus, Token::Minus]) {
+        // Loop for left-associativity: a + b + c = ((a + b) + c)
+        while let Some(op_tok) = self.match_any(&[Token::Plus, Token::Minus]) {
             let op = Self::binary_op_from_token(&op_tok.token)?;
-            let right = self.parse_expr()?;
-            return Some(Expression::Binary {
+            let right = Expression::Term(self.parse_term()?);
+            left = Expression::Binary {
                 left: Box::new(left),
                 op,
                 right: Box::new(right),
-            });
+            };
         }
 
         Some(left)
@@ -331,26 +349,50 @@ impl<'src> Parser<'src> {
         })
     }
 
-    /// Parse a term, which is a factor or a multiplication/division of factors.
+    /// Parse a term with left-associativity for * and /.
     pub fn parse_term(&mut self) -> Option<Term> {
-        let left = Term::Factor(self.parse_factor()?);
+        let mut left = Term::Factor(self.parse_power()?);
 
-        if let Some(op_tok) = self.match_any(&[Token::Star, Token::Slash]) {
+        // Loop for left-associativity: a * b * c = ((a * b) * c)
+        while let Some(op_tok) = self.match_any(&[Token::Star, Token::Slash]) {
             let op = Self::binary_op_from_token(&op_tok.token)?;
-            let right = self.parse_term()?;
-            return Some(Term::Binary {
+            let right = Term::Factor(self.parse_power()?);
+            left = Term::Binary {
                 left: Box::new(left),
                 op,
                 right: Box::new(right),
-            });
+            };
         }
 
         Some(left)
     }
 
-    /// Parse a factor, which can be a number, identifier, grouped expression, function call, builtin call, constant, or a power operation.
-    pub fn parse_factor(&mut self) -> Option<Factor> {
+    /// Parse power (exponentiation) with right-associativity.
+    /// Power has higher precedence than multiplication/division.
+    /// NOTE: Current implementation does NOT handle ^. This requires AST redesign
+    /// to represent power without Factor::Binary. For now, ^ will produce an error.
+    /// TODO: Add Factor::Power node or refactor to use Term level for power.
+    fn parse_power(&mut self) -> Option<Factor> {
+        self.parse_unary()
+    }
 
+    /// Parse unary expressions (prefix operators like -, +).
+    fn parse_unary(&mut self) -> Option<Factor> {
+        if let Some(op_tok) = self.match_any(&[Token::Minus, Token::Plus]) {
+            let op = match op_tok.token {
+                Token::Minus => UnaryOp::Neg,
+                Token::Plus => UnaryOp::Pos,
+                _ => unreachable!(),
+            };
+            let operand = Box::new(self.parse_unary()?);
+            return Some(Factor::Unary { op, operand });
+        }
+
+        self.parse_factor()
+    }
+
+    /// Parse a factor (primary expression): number, ident, grouped expr, call, builtin, constant.
+    pub fn parse_factor(&mut self) -> Option<Factor> {
         let base = match self.peek() {
             Token::Number(value) => {
                 let value = value.clone();
@@ -361,7 +403,26 @@ impl<'src> Parser<'src> {
             Token::Ident(name) | Token::InternalIdent(name) => {
                 let name = name.clone();
                 self.advance();
-                Factor::Ident(name)
+                
+                // Check if this is a function call: Ident followed by (
+                if self.check(&Token::LParen) {
+                    self.advance();
+                    let mut args = Vec::new();
+                    if !self.check(&Token::RParen) {
+                        loop {
+                            let expr = self.parse_expr()?;
+                            args.push(expr);
+                            if self.matches(&Token::Comma) {
+                                continue;
+                            }
+                            break;
+                        }
+                    }
+                    self.expect(&Token::RParen, "se esperaba ')' al cerrar llamada")?;
+                    Factor::Call { callee: name, args }
+                } else {
+                    Factor::Ident(name)
+                }
             }
 
             Token::LParen => {
@@ -409,19 +470,20 @@ impl<'src> Parser<'src> {
                 self.advance();
                 Factor::Const(ConstValue::E)
             }
+            Token::True => {
+                self.advance();
+                Factor::Const(ConstValue::True)
+            }
+            Token::False => {
+                self.advance();
+                Factor::Const(ConstValue::False)
+            }
 
             _ => {
                 self.error("se esperaba un factor");
                 return None;
             }
         };
-
-        // Power has the highest precedence and is right-associative.
-        if self.matches(&Token::Caret) {
-            let right = self.parse_factor()?;
-            let right_expr = Expression::Term(Term::Factor(right));
-            return Some(Factor::Binary { left: Box::new(base), op: BinaryOp::Pow, right: Box::new(right_expr) });
-        }
 
         Some(base)
     }
@@ -459,5 +521,42 @@ impl<'src> Parser<'src> {
             Token::Caret => Some(BinaryOp::Pow),
             _ => None,
         }
+    }
+
+    // =====================================================
+    // PUBLIC ENTRY POINT
+    // =====================================================
+
+    /// Parse a program: a sequence of top-level declarations (functions, statements).
+    /// Returns a vector of FunctionDef and consumes tokens until EOF.
+    /// Accumulates all errors encountered and continues parsing on error.
+    pub fn parse_program(&mut self) -> (Vec<FunctionDef>, Vec<String>) {
+        let mut functions = Vec::new();
+        let mut all_errors = Vec::new();
+
+        while !self.is_at_end() {
+            match self.peek() {
+                Token::Function => {
+                    // Parse function declaration
+                    if let Some(func) = self.parse_function() {
+                        functions.push(func);
+                    } else {
+                        all_errors.extend(self.errors.drain(..));
+                        self.synchronize();
+                    }
+                }
+                Token::Eof => {
+                    break;
+                }
+                _ => {
+                    self.error("se esperaba 'function' o fin de archivo");
+                    all_errors.extend(self.errors.drain(..));
+                    self.synchronize();
+                }
+            }
+        }
+
+        all_errors.extend(self.errors.drain(..));
+        (functions, all_errors)
     }
 }

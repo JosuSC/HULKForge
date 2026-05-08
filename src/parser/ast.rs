@@ -41,16 +41,13 @@ pub enum Term {
     },
 }
 
-/// A factor can be a number, a grouped expression, a binary operation of factors, an identifier, a function call, a built-in function call, or a constant value. This is the most basic unit of an expression.
+/// A factor can be a number, a grouped expression, an identifier, a function call,
+/// a built-in function call, a unary operation, or a constant value.
+/// This is the most basic unit of an expression.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Factor {
     Number(String),
     Group(Box<Expression>),
-    Binary {
-        left: Box<Factor>,
-        op: BinaryOp,
-        right: Box<Expression>,
-    },
     Ident(String),
     Call {
         callee: String,
@@ -59,6 +56,10 @@ pub enum Factor {
     BuiltinCall {
         func: BuiltinFn,
         args: Vec<Expression>,
+    },
+    Unary {
+        op: UnaryOp,
+        operand: Box<Factor>,
     },
     Const(ConstValue),
 }
@@ -70,6 +71,12 @@ pub enum BinaryOp {
     Mul,
     Div,
     Pow,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UnaryOp {
+    Neg,   // -
+    Pos,   // +
 }
 
 /// The built-in functions supported by the HULKForge language, which can be called with the 'builtin' keyword followed by the function name and arguments.
@@ -84,11 +91,14 @@ pub enum BuiltinFn {
     Rand,
 }
 
-/// The constant values supported by the HULKForge language, which can be used in expressions and represent mathematical constants like pi and e.
+/// The constant values supported by the HULKForge language, which can be used in expressions
+/// and represent mathematical constants like pi and e, or boolean values.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConstValue {
     Pi,
     E,
+    True,
+    False,
 }
 
 // ---------------------------------------------
