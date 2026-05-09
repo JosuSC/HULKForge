@@ -66,12 +66,11 @@ fn test_mixed_precedence_expr_term() {
 // ============================================
 
 #[test]
-#[ignore] // Power operator needs AST redesign; currently not fully supported
 fn test_power_right_associative() {
     // 2 ^ 3 ^ 2 should be 2 ^ (3 ^ 2) = 2 ^ 9 = 512
     let source = "function f() => 2 ^ 3 ^ 2;";
     let result = parse_source(source);
-    // Expected: will fail until Factor::Power is added to AST
+    assert!(result.is_some(), "Power operator should parse with right-associativity");
 }
 
 // ============================================
