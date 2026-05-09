@@ -1,107 +1,376 @@
-use crate::lexer::lexer::SpannedToken;
-use std::collections::HashMap;
+//! Abstract Syntax Tree for the HULK language.
+//!
+//! Design principles:
+//!   - One node per semantic construct, not per grammar rule.
+//!   - Precedence is encoded in tree structure, not in node types.
+//!   - Spans are preserved on every node for error reporting.
+//!   - No CST artifacts: parentheses, semicolons, and grammar
+//!     stratification levels (Term, Factor) do not appear here.
 
+use crate::lexer::lexer::Span;
 
-// ---------------------------------------------
-// STATEMENT (ASSIGNMENT)
-// ---------------------------------------------
+// ══════════════════════════════════════════════
+// PROGRAM
+// ══════════════════════════════════════════════
 
-/// The abstract syntax tree (AST) for the HULKForge language, representing statements, expressions, terms, factors, binary operations, built-in functions, constants, and function definitions.
+/// A complete HULK program: zero or more declarations
+/// followed by a mandatory global expression.
 #[derive(Debug, Clone, PartialEq)]
-pub enum Statement {
-    Assign {
-        assignments: HashMap<SpannedToken, Expression>,
-        body: Box<Expression>,
-    },
+pub struct Program {
+    pub decls:  Vec<Decl>,
+    pub expr:   Box<Expr>,
+    pub span:   Span,
 }
 
-// ---------------------------------------------
-// ARITHMETIC 
-// ---------------------------------------------
+// ══════════════════════════════════════════════
+// DECLARATIONS
+// ══════════════════════════════════════════════
 
-/// The abstract syntax tree (AST) for the HULKForge language, representing expressions, terms, factors, binary operations, built-in functions, constants, and function definitions.
 #[derive(Debug, Clone, PartialEq)]
-pub enum Expression {
-    Term(Term),
-    Binary {
-        left: Box<Expression>,
-        op: BinaryOp,
-        right: Box<Expression>,
-    },
+pub enum Decl {
+    Function(FuncDecl),
+    Type(TypeDecl),
+    Protocol(ProtocolDecl),
+    Macro(MacroDecl),
 }
 
-/// A term can be a factor or a binary operation of factors. This allows for operator precedence, where multiplication and division are evaluated before addition and subtraction.
+// ── Function ─────────────────────────────────
+
 #[derive(Debug, Clone, PartialEq)]
-pub enum Term {
-    Factor(Factor),
-    Binary {
-        left: Box<Term>,
-        op: BinaryOp,
-        right: Box<Term>,
-    },
+pub struct FuncDecl {
+    pub name:        String,
+    pub params:      Vec<Param>,
+    pub return_type: Option<TypeExpr>,
+    pub body:        FuncBody,
+    pub span:        Span,
 }
 
-/// A factor can be a number, a grouped expression, an identifier, a function call,
-/// a built-in function call, a unary operation, or a constant value.
-/// This is the most basic unit of an expression.
 #[derive(Debug, Clone, PartialEq)]
-pub enum Factor {
-    Number(String),
-    Group(Box<Expression>),
-    Ident(String),
+pub struct Param {
+    pub name: String,
+    pub ty:   Option<TypeExpr>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum FuncBody {
+    /// function f(x) => expr;
+    Inline(Box<Expr>),
+    /// function f(x) { expr; expr; expr }
+    Block(Box<Expr>),
+}
+
+// ── Type ─────────────────────────────────────
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TypeDecl {
+    pub name:        String,
+    pub type_params: Vec<Param>,
+    pub inherits:    Option<InheritsClause>,
+    pub members:     Vec<TypeMember>,
+    pub span:        Span,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct InheritsClause {
+    pub parent: String,
+    pub args:   Vec<Expr>,
+    pub span:   Span,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum TypeMember {
+    Attribute(AttrDef),
+    Method(MethodDef),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AttrDef {
+    pub name: String,
+    pub ty:   Option<TypeExpr>,
+    pub init: Box<Expr>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MethodDef {
+    pub name:        String,
+    pub params:      Vec<Param>,
+    pub return_type: Option<TypeExpr>,
+    pub body:        FuncBody,
+    pub span:        Span,
+}
+
+// ── Protocol ──────────────────────────────────
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProtocolDecl {
+    pub name:    String,
+    pub extends: Option<String>,
+    pub methods: Vec<MethodSig>,
+    pub span:    Span,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MethodSig {
+    pub name:        String,
+    pub params:      Vec<SigParam>,
+    pub return_type: TypeExpr,
+    pub span:        Span,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SigParam {
+    pub name: String,
+    pub ty:   TypeExpr,
+    pub span: Span,
+}
+
+// ── Macro ─────────────────────────────────────
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MacroDecl {
+    pub name:   String,
+    pub params: Vec<MacroParam>,
+    pub body:   FuncBody,
+    pub span:   Span,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum MacroParam {
+    /// Regular parameter: name, optional type
+    Regular(Param),
+    /// Block argument: *expr
+    Block { name: String, ty: TypeExpr, span: Span },
+    /// Symbolic argument: @symbol
+    Symbolic { name: String, ty: TypeExpr, span: Span },
+    /// Variable placeholder: $iter
+    Placeholder { name: String, ty: TypeExpr, span: Span },
+}
+
+// ══════════════════════════════════════════════
+// EXPRESSIONS
+// ══════════════════════════════════════════════
+
+/// Every syntactic construct in HULK is an expression.
+/// Span is included in every variant for error reporting.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Expr {
+
+    // ── Literals ─────────────────────────────
+
+    /// Numeric literal. Stored as String to avoid parser-time
+    /// float parsing — the semantic phase converts it to f64.
+    Number { value: String, span: Span },
+
+    /// String literal with escapes already expanded.
+    StringLit { value: String, span: Span },
+
+    /// Boolean literal.
+    Bool { value: bool, span: Span },
+
+    // ── Variables and calls ───────────────────
+
+    /// Variable reference or function call.
+    Ident { name: String, span: Span },
+
+    /// Function or method call.
     Call {
-        callee: String,
-        args: Vec<Expression>,
+        callee: Box<Expr>,
+        args:   Vec<Expr>,
+        span:   Span,
     },
 
-    Unary {
-        op: UnaryOp,
-        operand: Box<Factor>,
+    // ── Object oriented ───────────────────────
+
+    /// `new TypeName(args)`
+    New {
+        type_name: String,
+        args:      Vec<Expr>,
+        span:      Span,
     },
-    Binary {
-        left: Box<Factor>,
-        op: BinaryOp,
-        right: Box<Factor>,
+
+    /// `expr.member` or `expr.method(args)`
+    FieldAccess {
+        object: Box<Expr>,
+        field:  String,
+        span:   Span,
+    },
+
+    MethodCall {
+        object: Box<Expr>,
+        method: String,
+        args:   Vec<Expr>,
+        span:   Span,
+    },
+
+    /// `self`
+    SelfRef { span: Span },
+
+    /// `base(args)` — call to parent implementation
+    Base { args: Vec<Expr>, span: Span },
+
+    // ── Operators ─────────────────────────────
+
+    BinaryOp {
+        op:    BinOp,
+        left:  Box<Expr>,
+        right: Box<Expr>,
+        span:  Span,
+    },
+
+    UnaryOp {
+        op:      UnaryOp,
+        operand: Box<Expr>,
+        span:    Span,
+    },
+
+    // ── Type operations ───────────────────────
+
+    /// `expr is TypeExpr`
+    IsType {
+        expr:    Box<Expr>,
+        ty:      TypeExpr,
+        span:    Span,
+    },
+
+    /// `expr as TypeExpr`
+    AsType {
+        expr: Box<Expr>,
+        ty:   TypeExpr,
+        span: Span,
+    },
+
+    // ── Control flow ──────────────────────────
+
+    /// `if (cond) then elif* else`
+    If {
+        condition: Box<Expr>,
+        then_expr: Box<Expr>,
+        elif_branches: Vec<ElifBranch>,
+        else_expr: Box<Expr>,
+        span:      Span,
+    },
+
+    /// `while (cond) body`
+    While {
+        condition: Box<Expr>,
+        body:      Box<Expr>,
+        span:      Span,
+    },
+
+    /// `for (var in iterable) body`
+    For {
+        var:      String,
+        iterable: Box<Expr>,
+        body:     Box<Expr>,
+        span:     Span,
+    },
+
+    // ── Binding ───────────────────────────────
+
+    /// `let x = e1, y = e2 in body`
+    Let {
+        bindings: Vec<LetBinding>,
+        body:     Box<Expr>,
+        span:     Span,
+    },
+
+    /// `var := expr` — destructive assignment
+    Assign {
+        target: String,
+        value:  Box<Expr>,
+        span:   Span,
+    },
+
+    // ── Blocks ────────────────────────────────
+
+    /// `{ expr; expr; expr }`
+    /// The value is the last expression.
+    Block {
+        exprs: Vec<Expr>,
+        span:  Span,
+    },
+
+    // ── Vectors ───────────────────────────────
+
+    /// `[e1, e2, e3]`
+    VectorLit {
+        elements: Vec<Expr>,
+        span:     Span,
+    },
+
+    /// `[expr | var in iterable]`
+    VectorGen {
+        element:  Box<Expr>,
+        var:      String,
+        iterable: Box<Expr>,
+        span:     Span,
+    },
+
+    /// `expr[index]`
+    Index {
+        object: Box<Expr>,
+        index:  Box<Expr>,
+        span:   Span,
     },
 }
+
+// ── Supporting types ──────────────────────────
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ElifBranch {
+    pub condition: Box<Expr>,
+    pub body:      Box<Expr>,
+    pub span:      Span,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct LetBinding {
+    pub name: String,
+    pub ty:   Option<TypeExpr>,
+    pub init: Box<Expr>,
+    pub span: Span,
+}
+
+// ══════════════════════════════════════════════
+// OPERATORS
+// ══════════════════════════════════════════════
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BinaryOp {
-    Add,
-    Sub,
-    Mul,
-    Div,
-    Pow,
+pub enum BinOp {
+    // Arithmetic
+    Add, Sub, Mul, Div, Mod, Pow,
+    // Comparison
+    Eq, NotEq, Lt, Gt, LtEq, GtEq,
+    // Boolean
+    And, Or,
+    // String
+    Concat,       // @
+    ConcatSpace,  // @@
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UnaryOp {
-    Neg,   // -
-    Pos,   // +
+    Neg,  // -
+    Not,  // !
 }
 
-// ---------------------------------------------
-// FUNCTION 
-// ---------------------------------------------
+// ══════════════════════════════════════════════
+// TYPE EXPRESSIONS
+// ══════════════════════════════════════════════
 
-/// A function parameter consists of a name and an optional type annotation. The type annotation is represented as a spanned token, which includes the token itself and its position in the source code for error reporting.
 #[derive(Debug, Clone, PartialEq)]
-pub struct FunctionParam {
-    pub name: SpannedToken,
-    pub ty: Option<SpannedToken>,
-}
-
-/// A function body can be either an inline expression, which is a single expression followed by a semicolon, or a block of expressions enclosed in braces. This allows for both simple one-line functions and more complex multi-line functions.
-#[derive(Debug, Clone, PartialEq)]
-pub enum FunctionBody {
-    Inline(Expression),
-    Block(Vec<Expression>),
-}
-
-/// A function definition consists of a name, a list of parameters, and a body. The name is represented as a spanned token for error reporting, the parameters are a vector of function parameters, and the body is a function body that can be either inline or block.
-#[derive(Debug, Clone, PartialEq)]
-pub struct FunctionDef {
-    pub name: SpannedToken,
-    pub params: Vec<FunctionParam>,
-    pub body: FunctionBody,
+pub enum TypeExpr {
+    /// Simple nominal type: Number, String, MyType
+    Named(String),
+    /// Iterable of T: Number*
+    Iterable(Box<TypeExpr>),
+    /// Vector of T: Number[]
+    Vector(Box<TypeExpr>),
+    /// Functor: (A, B) -> C
+    Functor {
+        params:  Vec<TypeExpr>,
+        returns: Box<TypeExpr>,
+    },
 }
