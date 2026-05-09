@@ -1038,14 +1038,19 @@ impl<'src> Parser<'src> {
             }
         }
 
-        // Parse mandatory global expression
-        let expr = self.parse_expr()?;
+        // Parse optional global expression
+        let expr = if self.is_at_end() {
+            // If we're at EOF and have only declarations, create a unit expression
+            Box::new(Expr::Ident { name: "()".to_string(), span: start_span })
+        } else {
+            Box::new(self.parse_expr()?)
+        };
 
         // Consume optional trailing semicolon
         self.matches(&Token::Semicolon);
 
         let span = Span { start: start_span.start, end: expr.span().end };
-        Some(Program { decls, expr: Box::new(expr), span })
+        Some(Program { decls, expr, span })
     }
 
     // Parse a parameter for functions/methods/type params
