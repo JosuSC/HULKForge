@@ -122,22 +122,6 @@ pub enum Token {
     #[token("def")]      Def,       // Macros (section A.14).
 
     // ---------------------------------------------
-    // BUILT-IN MATH FUNCTIONS AND TYPES
-    // ---------------------------------------------
-
-    #[token("sqrt")]     Sqrt,
-    #[token("sin")]      Sin,
-    #[token("cos")]      Cos,
-    #[token("exp")]      Exp,
-    #[token("log")]      Log,
-    #[token("rand")]     Rand,
-    #[token("PI", priority = 3)] Pi,
-    #[token("E", priority = 3)]  E,
-    #[token("Number", priority = 3)]  TypNumber,
-    #[token("String", priority = 3)]  TypString,
-    #[token("Boolean", priority = 3)] TypBool,
-
-    // ---------------------------------------------
     // LITERALS
     // ---------------------------------------------
 

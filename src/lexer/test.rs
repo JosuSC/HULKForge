@@ -40,7 +40,7 @@ fn keywords() {
 fn builtin_type_names() {
     assert_eq!(
         tokens("Number String Boolean"),
-        vec![Token::TypNumber, Token::TypString, Token::TypBool]
+        vec![Token::Ident("Number".into()), Token::Ident("String".into()), Token::Ident("Boolean".into())]
     );
 }
 
@@ -432,9 +432,9 @@ fn builtin_call_exact() {
     assert_eq!(
         tokens("sin(PI)"),
         vec![
-            Token::Sin,
+            Token::Ident("sin".into()),
             Token::LParen,
-            Token::Pi,
+            Token::Ident("PI".into()),
             Token::RParen,
         ]
     );
@@ -445,7 +445,7 @@ fn log_call_exact() {
     assert_eq!(
         tokens("log(2, 8)"),
         vec![
-            Token::Log,
+            Token::Ident("log".into()),
             Token::LParen,
             Token::Number("2".into()),
             Token::Comma,
@@ -460,26 +460,26 @@ fn builtin_math_extra_exact() {
     assert_eq!(
         tokens("sqrt(4) + cos(0) + exp(1) + rand() + E"),
         vec![
-            Token::Sqrt,
+            Token::Ident("sqrt".into()),
             Token::LParen,
             Token::Number("4".into()),
             Token::RParen,
             Token::Plus,
-            Token::Cos,
+            Token::Ident("cos".into()),
             Token::LParen,
             Token::Number("0".into()),
             Token::RParen,
             Token::Plus,
-            Token::Exp,
+            Token::Ident("exp".into()),
             Token::LParen,
             Token::Number("1".into()),
             Token::RParen,
             Token::Plus,
-            Token::Rand,
+            Token::Ident("rand".into()),
             Token::LParen,
             Token::RParen,
             Token::Plus,
-            Token::E,
+            Token::Ident("E".into()),
         ]
     );
 }
@@ -904,9 +904,9 @@ fn type_complex_1() {
             Token::LBrace,
             Token::Ident("f".into()),
             Token::LParen,
-            Token::Ident("x".into()), Token::Colon, Token::TypNumber,
+            Token::Ident("x".into()), Token::Colon, Token::Ident("Number".into()),
             Token::RParen,
-            Token::Colon, Token::TypNumber,
+            Token::Colon, Token::Ident("Number".into()),
             Token::Arrow,
             Token::Ident("x".into()),
             Token::Semicolon,
@@ -945,9 +945,9 @@ fn protocol_complex_1() {
             Token::Protocol, Token::Ident("P".into()),
             Token::LBrace,
             Token::Ident("f".into()), Token::LParen, Token::RParen,
-            Token::Colon, Token::TypNumber, Token::Semicolon,
+            Token::Colon, Token::Ident("Number".into()), Token::Semicolon,
             Token::Ident("g".into()), Token::LParen, Token::RParen,
-            Token::Colon, Token::TypBool, Token::Semicolon,
+            Token::Colon, Token::Ident("Boolean".into()), Token::Semicolon,
             Token::RBrace,
         ]
     );
@@ -1118,7 +1118,7 @@ fn type_A_definition() {
             Token::LBrace,
                 Token::Ident("f".into()),
                 Token::LParen, Token::Ident("x".into()),
-                Token::Colon, Token::TypNumber,
+                Token::Colon, Token::Ident("Number".into()),
                 Token::RParen,
                 Token::Arrow,
                 Token::Ident("x".into()),
@@ -1167,14 +1167,14 @@ fn type_animal_and_dog() {
         vec![
             Token::Type, Token::Ident("Animal".into()),
             Token::LBrace,
-                Token::Ident("name".into()), Token::Colon, Token::TypString, Token::Comma,
-                Token::Ident("age".into()), Token::Colon, Token::TypNumber,
+                Token::Ident("name".into()), Token::Colon, Token::Ident("String".into()), Token::Comma,
+                Token::Ident("age".into()), Token::Colon, Token::Ident("Number".into()),
             Token::RBrace,
 
             Token::Type, Token::Ident("Dog".into()),
             Token::Inherits, Token::Ident("Animal".into()),
             Token::LBrace,
-                Token::Ident("breed".into()), Token::Colon, Token::TypString,
+                Token::Ident("breed".into()), Token::Colon, Token::Ident("String".into()),
             Token::RBrace,
         ]
     );
@@ -1195,8 +1195,8 @@ fn function_makeDog() {
         vec![
             Token::Function, Token::Ident("makeDog".into()),
             Token::LParen,
-                Token::Ident("n".into()), Token::Colon, Token::TypString, Token::Comma,
-                Token::Ident("b".into()), Token::Colon, Token::TypString,
+                Token::Ident("n".into()), Token::Colon, Token::Ident("String".into()), Token::Comma,
+                Token::Ident("b".into()), Token::Colon, Token::Ident("String".into()),
             Token::RParen,
             Token::Arrow,
             Token::LBrace,
@@ -1260,8 +1260,8 @@ fn function_makeCat() {
         vec![
             Token::Function, Token::Ident("makeCat".into()),
             Token::LParen,
-                Token::Ident("n".into()), Token::Colon, Token::TypString, Token::Comma,
-                Token::Ident("c".into()), Token::Colon, Token::TypString,
+                Token::Ident("n".into()), Token::Colon, Token::Ident("String".into()), Token::Comma,
+                Token::Ident("c".into()), Token::Colon, Token::Ident("String".into()),
             Token::RParen,
             Token::Arrow,
             Token::LBrace,
@@ -1413,7 +1413,7 @@ fn function_return_bool() {
         vec![
             Token::Function, Token::Ident("isZero".into()),
             Token::LParen,
-                Token::Ident("n".into()), Token::Colon, Token::TypNumber,
+                Token::Ident("n".into()), Token::Colon, Token::Ident("Number".into()),
             Token::RParen,
             Token::Arrow,
             Token::Ident("n".into()), Token::EqEq, Token::Number("0".into()),
@@ -1599,8 +1599,8 @@ fn function_distance() {
         vec![
             Token::Function, Token::Ident("distance".into()),
             Token::LParen,
-                Token::Ident("x".into()), Token::Colon, Token::TypNumber, Token::Comma,
-                Token::Ident("y".into()), Token::Colon, Token::TypNumber,
+                Token::Ident("x".into()), Token::Colon, Token::Ident("Number".into()), Token::Comma,
+                Token::Ident("y".into()), Token::Colon, Token::Ident("Number".into()),
             Token::RParen,
             Token::Arrow,
             Token::LBrace,
@@ -1673,11 +1673,11 @@ fn dollar_in_macro_def() {
             Token::Dollar,
             Token::Ident("iter".into()),
             Token::Colon,
-            Token::TypNumber,
+            Token::Ident("Number".into()),
             Token::Comma,
             Token::Ident("n".into()),
             Token::Colon,
-            Token::TypNumber,
+            Token::Ident("Number".into()),
             Token::RParen,
         ]
     );
@@ -1693,7 +1693,7 @@ fn def_keyword() {
             Token::LParen,
             Token::Ident("n".into()),
             Token::Colon,
-            Token::TypNumber,
+            Token::Ident("Number".into()),
             Token::RParen,
         ]
     );
@@ -1710,7 +1710,7 @@ fn def_with_star_arg() {
             Token::LParen,
             Token::Ident("n".into()),
             Token::Colon,
-            Token::TypNumber,
+            Token::Ident("Number".into()),
             Token::Comma,
             Token::Star,
             Token::Ident("expr".into()),
@@ -1735,10 +1735,10 @@ fn thin_arrow_exact() {
         tokens("(Number) -> Boolean"),
         vec![
             Token::LParen,
-            Token::TypNumber,
+            Token::Ident("Number".into()),
             Token::RParen,
             Token::ThinArrow,
-            Token::TypBool,
+            Token::Ident("Boolean".into()),
         ]
     );
 }
@@ -1762,10 +1762,10 @@ fn thin_arrow_in_functor_annotation() {
             Token::Ident("filter".into()),
             Token::Colon,
             Token::LParen,
-            Token::TypNumber,
+            Token::Ident("Number".into()),
             Token::RParen,
             Token::ThinArrow,
-            Token::TypBool,
+            Token::Ident("Boolean".into()),
             Token::RParen,
         ]
     );
@@ -1911,5 +1911,94 @@ fn number_large_float() {
     assert_eq!(
         tokens("123456789.987654321"),
         vec![Token::Number("123456789.987654321".into())]
+    );
+}
+
+// ┌─────────────────────────────────────────────────────────────────────┐
+// │ BUILTINS AS IDENTIFIERS: lexer must NOT recognize builtins as       │
+// │ keywords; parser/semantic analyzer handles them                     │
+// └─────────────────────────────────────────────────────────────────────┘
+
+#[test]
+fn builtins_are_idents() {
+    assert_eq!(tokens("sin"),  vec![Token::Ident("sin".into())]);
+    assert_eq!(tokens("cos"),  vec![Token::Ident("cos".into())]);
+    assert_eq!(tokens("sqrt"), vec![Token::Ident("sqrt".into())]);
+    assert_eq!(tokens("exp"),  vec![Token::Ident("exp".into())]);
+    assert_eq!(tokens("log"),  vec![Token::Ident("log".into())]);
+    assert_eq!(tokens("rand"), vec![Token::Ident("rand".into())]);
+    assert_eq!(tokens("print"),vec![Token::Ident("print".into())]);
+}
+
+#[test]
+fn math_constants_are_idents() {
+    assert_eq!(tokens("PI"), vec![Token::Ident("PI".into())]);
+    assert_eq!(tokens("E"),  vec![Token::Ident("E".into())]);
+}
+
+#[test]
+fn builtin_types_are_idents() {
+    assert_eq!(tokens("Number"),  vec![Token::Ident("Number".into())]);
+    assert_eq!(tokens("String"),  vec![Token::Ident("String".into())]);
+    assert_eq!(tokens("Boolean"), vec![Token::Ident("Boolean".into())]);
+    assert_eq!(tokens("Object"),  vec![Token::Ident("Object".into())]);
+}
+
+#[test]
+fn builtins_in_call_position() {
+    // sin(PI) must tokenize as Ident + LParen + Ident + RParen
+    assert_eq!(
+        tokens("sin(PI)"),
+        vec![
+            Token::Ident("sin".into()),
+            Token::LParen,
+            Token::Ident("PI".into()),
+            Token::RParen,
+        ]
+    );
+}
+
+#[test]
+fn builtin_as_variable_name() {
+    // HULK allows shadowing builtins with let
+    // lexically this must work without errors
+    assert_eq!(
+        tokens("let sin = 42 in sin"),
+        vec![
+            Token::Let,
+            Token::Ident("sin".into()),
+            Token::Eq,
+            Token::Number("42".into()),
+            Token::In,
+            Token::Ident("sin".into()),
+        ]
+    );
+}
+
+#[test]
+fn type_names_in_annotation() {
+    // Number, String, Boolean in type annotations are just Ident
+    assert_eq!(
+        tokens("x: Number"),
+        vec![
+            Token::Ident("x".into()),
+            Token::Colon,
+            Token::Ident("Number".into()),
+        ]
+    );
+}
+
+#[test]
+fn log_call_is_ident_call() {
+    assert_eq!(
+        tokens("log(2, 8)"),
+        vec![
+            Token::Ident("log".into()),
+            Token::LParen,
+            Token::Number("2".into()),
+            Token::Comma,
+            Token::Number("8".into()),
+            Token::RParen,
+        ]
     );
 }

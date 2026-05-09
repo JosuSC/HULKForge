@@ -54,13 +54,6 @@ fn print_factor(f: &Factor, indent: usize) {
 				print_expression(a, indent + 2);
 			}
 		}
-		Factor::BuiltinCall { func, args } => {
-			println!("{}BuiltinCall {:?}", pad, func);
-			for a in args {
-				print_expression(a, indent + 2);
-			}
-		}
-		Factor::Const(c) => println!("{}Const {:?}", pad, c),
 		Factor::Unary { op, operand } => {
 			println!("{}Unary {:?}", pad, op);
 			print_factor(operand, indent + 2);
@@ -118,9 +111,6 @@ fn print_function_def(func: &FunctionDef, indent: usize) {
 				Some(ty) => match &ty.token {
 					crate::lexer::lexer::Token::Ident(name)
 					| crate::lexer::lexer::Token::InternalIdent(name) => Some(name.clone()),
-					crate::lexer::lexer::Token::TypNumber => Some("Number".to_string()),
-					crate::lexer::lexer::Token::TypString => Some("String".to_string()),
-					crate::lexer::lexer::Token::TypBool => Some("Boolean".to_string()),
 					other => Some(format!("{:?}", other)),
 				},
 				None => None,

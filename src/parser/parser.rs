@@ -1,5 +1,5 @@
 use crate::lexer::lexer::{Token, SpannedToken, TokenStream};
-use crate::parser::ast::{BinaryOp, BuiltinFn, ConstValue, Expression, Factor, FunctionBody, FunctionDef, FunctionParam, Statement, Term, UnaryOp};
+use crate::parser::ast::{BinaryOp, Expression, Factor, FunctionBody, FunctionDef, FunctionParam, Statement, Term, UnaryOp};
 use std::collections::HashMap;
 
 
@@ -269,21 +269,6 @@ impl<'src> Parser<'src> {
                 self.advance();
                 Some(tok)
             }
-            Token::TypNumber => {
-                let tok = self.current.clone();
-                self.advance();
-                Some(tok)
-            }
-            Token::TypString => {
-                let tok = self.current.clone();
-                self.advance();
-                Some(tok)
-            }
-            Token::TypBool => {
-                let tok = self.current.clone();
-                self.advance();
-                Some(tok)
-            }
             _ => {
                 self.error(msg);
                 None
@@ -432,51 +417,13 @@ impl<'src> Parser<'src> {
                 Factor::Group(Box::new(expr))
             }
 
-            Token::Sin => {
-                self.advance();
-                let args = self.parse_call_args("sin")?;
-                Factor::BuiltinCall { func: BuiltinFn::Sin, args }
-            }
-            Token::Cos => {
-                self.advance();
-                let args = self.parse_call_args("cos")?;
-                Factor::BuiltinCall { func: BuiltinFn::Cos, args }
-            }
-            Token::Log => {
-                self.advance();
-                let args = self.parse_call_args("log")?;
-                Factor::BuiltinCall { func: BuiltinFn::Log, args }
-            }
-            Token::Sqrt => {
-                self.advance();
-                let args = self.parse_call_args("sqrt")?;
-                Factor::BuiltinCall { func: BuiltinFn::Sqrt, args }
-            }
-            Token::Exp => {
-                self.advance();
-                let args = self.parse_call_args("exp")?;
-                Factor::BuiltinCall { func: BuiltinFn::Exp, args }
-            }
-            Token::Rand => {
-                self.advance();
-                let args = self.parse_call_args("rand")?;
-                Factor::BuiltinCall { func: BuiltinFn::Rand, args }
-            }
-            Token::Pi => {
-                self.advance();
-                Factor::Const(ConstValue::Pi)
-            }
-            Token::E => {
-                self.advance();
-                Factor::Const(ConstValue::E)
-            }
             Token::True => {
                 self.advance();
-                Factor::Const(ConstValue::True)
+                Factor::Ident("true".to_string())
             }
             Token::False => {
                 self.advance();
-                Factor::Const(ConstValue::False)
+                Factor::Ident("false".to_string())
             }
 
             _ => {
@@ -486,29 +433,6 @@ impl<'src> Parser<'src> {
         };
 
         Some(base)
-    }
-
-    /// Parse arguments for a function call, expecting them to be enclosed in parentheses.
-    fn parse_call_args(&mut self, ctx: &str) -> Option<Vec<Expression>> {
-        let msg = format!("se esperaba '(' despues de {}", ctx);
-        self.expect(&Token::LParen, &msg)?;
-
-        let mut args = Vec::new();
-        if !self.check(&Token::RParen) {
-            loop {
-                let expr = self.parse_expr()?;
-                args.push(expr);
-
-                if self.matches(&Token::Comma) {
-                    continue;
-                }
-
-                break;
-            }
-        }
-
-        self.expect(&Token::RParen, "se esperaba ')' al cerrar llamada")?;
-        Some(args)
     }
 
     /// Convert a token to a binary operator if it matches.

@@ -53,10 +53,7 @@ pub enum Factor {
         callee: String,
         args: Vec<Expression>,
     },
-    BuiltinCall {
-        func: BuiltinFn,
-        args: Vec<Expression>,
-    },
+
     Unary {
         op: UnaryOp,
         operand: Box<Factor>,
@@ -66,7 +63,6 @@ pub enum Factor {
         op: BinaryOp,
         right: Box<Factor>,
     },
-    Const(ConstValue),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -82,28 +78,6 @@ pub enum BinaryOp {
 pub enum UnaryOp {
     Neg,   // -
     Pos,   // +
-}
-
-/// The built-in functions supported by the HULKForge language, which can be called with the 'builtin' keyword followed by the function name and arguments.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BuiltinFn {
-    Sin,
-    Cos,
-    Log,
-    Tan,
-    Sqrt,
-    Exp,
-    Rand,
-}
-
-/// The constant values supported by the HULKForge language, which can be used in expressions
-/// and represent mathematical constants like pi and e, or boolean values.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ConstValue {
-    Pi,
-    E,
-    True,
-    False,
 }
 
 // ---------------------------------------------
