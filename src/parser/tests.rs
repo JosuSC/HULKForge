@@ -352,3 +352,22 @@ fn test_builtin_functions() {
     let result = parse_source(source);
     assert!(result.is_some(), "Builtin functions should parse");
 }
+
+#[test]
+fn test_vector_generator_parse() {
+    let source = "function f() => [x^2 | x in range(1,10)];";
+    let result = parse_source(source);
+    assert!(result.is_some(), "Vector generator should parse");
+
+    if let Some(program) = result {
+        if let Decl::Function(func_def) = &program.decls[0] {
+            if let FuncBody::Inline(expr) = &func_def.body {
+                assert!(matches!(**expr, Expr::VectorGen { .. }));
+            } else {
+                panic!("Expected inline function body");
+            }
+        } else {
+            panic!("Expected function declaration");
+        }
+    }
+}

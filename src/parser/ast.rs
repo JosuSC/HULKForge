@@ -122,7 +122,7 @@ pub struct MethodSig {
 #[derive(Debug, Clone, PartialEq)]
 pub struct SigParam {
     pub name: String,
-    pub ty:   TypeExpr,
+    pub ty:   Option<TypeExpr>,
     pub span: Span,
 }
 
@@ -276,9 +276,9 @@ pub enum Expr {
         span:     Span,
     },
 
-    /// `var := expr` — destructive assignment
+    /// `var := expr` — destructive assignment (target can be Ident, FieldAccess, or Index)
     Assign {
-        target: String,
+        target: Box<Expr>,
         value:  Box<Expr>,
         span:   Span,
     },
@@ -313,6 +313,14 @@ pub enum Expr {
         object: Box<Expr>,
         index:  Box<Expr>,
         span:   Span,
+    },
+
+    /// Anonymous function / lambda: `(params) -> ReturnType => body` or `(params) => body`
+    Lambda {
+        params: Vec<Param>,
+        return_type: Option<TypeExpr>,
+        body: FuncBody,
+        span: Span,
     },
 }
 

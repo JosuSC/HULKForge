@@ -136,28 +136,32 @@ impl<'src> Parser<'src> {
 
     /// Parse assignment (destructive assignment, right-associative).
     ///
-    /// **Grammar:** IDENT ":=" parse_assign | OrExpr
+    /// **Grammar:** LVALUE ":=" parse_assign | OrExpr
     ///
-    /// Parse OrExpr first, then check if result is Ident and next token is ":=".
+    /// LVALUE can be: Ident, FieldAccess (x.field), or Index (x[i])
+    /// Parse OrExpr first, then check if result is a valid lvalue and next token is ":=".
     fn parse_assign(&mut self) -> Option<Expr> {
         let left = self.parse_or()?;
 
         if self.matches(&Token::ColonAssign) {
-            if let Expr::Ident { name, .. } = &left {
-                let name = name.clone();
-                let value = self.parse_assign()?;
-                let span = Span {
-                    start: left.span().start,
-                    end: value.span().end,
-                };
-                return Some(Expr::Assign {
-                    target: name,
-                    value: Box::new(value),
-                    span,
-                });
-            } else {
-                self.error("assignment target must be a simple identifier");
-                return None;
+            // Check if left is a valid assignment target (Ident, FieldAccess, or Index)
+            match &left {
+                Expr::Ident { .. } | Expr::FieldAccess { .. } | Expr::Index { .. } => {
+                    let value = self.parse_assign()?;
+                    let span = Span {
+                        start: left.span().start,
+                        end: value.span().end,
+                    };
+                    return Some(Expr::Assign {
+                        target: Box::new(left),
+                        value: Box::new(value),
+                        span,
+                    });
+                }
+                _ => {
+                    self.error("assignment target must be an identifier, field access (e.g., x.field), or index (e.g., x[i])");
+                    return None;
+                }
             }
         }
 
@@ -615,9 +619,86 @@ impl<'src> Parser<'src> {
             }
 
             Token::LParen => {
-                // Capture '(' span, parse inner expression, capture ')' span,
-                // and extend the inner expression's span to cover the parentheses.
+                // Possible lambda or grouped expression. We do a safe lookahead
+                // using TokenStream::peek_n to detect the pattern:
+                //   ( params ) -> Type => body
+                //   ( params ) => body
                 let lparen_span = self.current.span;
+                // Look ahead to find matching ')' index and token after it.
+                let mut idx = 1usize;
+                let mut depth = 0i32;
+                let mut found_rparen: Option<usize> = None;
+                while let Some(tok) = self.tokens.peek_n(idx) {
+                    match tok.token {
+                        Token::LParen => depth += 1,
+                        Token::RParen => {
+                            if depth == 0 {
+                                found_rparen = Some(idx);
+                                break;
+                            } else {
+                                depth -= 1;
+                            }
+                        }
+                        Token::Eof => break,
+                        _ => {}
+                    }
+                    idx += 1;
+                }
+
+                if let Some(ridx) = found_rparen {
+                    if let Some(after) = self.tokens.peek_n(ridx + 1) {
+                        match after.token {
+                            Token::ThinArrow | Token::Arrow => {
+                                // It's a lambda: consume '(' and parse param list
+                                self.advance(); // consume '('
+                                let mut params = Vec::new();
+                                if !self.check(&Token::RParen) {
+                                    params.push(self.parse_param()?);
+                                    while self.matches(&Token::Comma) {
+                                        params.push(self.parse_param()?);
+                                    }
+                                }
+                                let _rparen = self.expect(&Token::RParen, "expected ')' after parameter list")?;
+
+                                // Optional return type after '->'
+                                let return_type = if self.matches(&Token::ThinArrow) {
+                                    let (t, _) = self.parse_type_expr()?;
+                                    Some(t)
+                                } else {
+                                    None
+                                };
+
+                                // Body must follow '=>' (Arrow)
+                                if self.matches(&Token::Arrow) {
+                                    // Inline expression body
+                                    let inline_expr = self.parse_expr()?;
+                                    let body = FuncBody::Inline(Box::new(inline_expr));
+                                    let body_end = match &body {
+                                        FuncBody::Inline(e) => e.span().end,
+                                        FuncBody::Block(e) => e.span().end,
+                                    };
+                                    let span = Span { start: lparen_span.start, end: body_end };
+                                    return Some(Expr::Lambda { params, return_type, body, span });
+                                } else if self.check(&Token::LBrace) {
+                                    let block = self.parse_block()?;
+                                    let body = FuncBody::Block(Box::new(block));
+                                    let body_end = match &body {
+                                        FuncBody::Inline(e) => e.span().end,
+                                        FuncBody::Block(e) => e.span().end,
+                                    };
+                                    let span = Span { start: lparen_span.start, end: body_end };
+                                    return Some(Expr::Lambda { params, return_type, body, span });
+                                } else {
+                                    self.error("expected '=>' or '{' after lambda header");
+                                    return None;
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+
+                // Fallback: regular grouped expression
                 self.advance();
                 let inner = self.parse_expr()?;
                 let rparen = self.expect(&Token::RParen, "expected ')' after expression")?;
@@ -665,7 +746,7 @@ impl<'src> Parser<'src> {
         while !self.check(&Token::RBrace) && !self.is_at_end() {
             let expr = self.parse_expr()?;
             exprs.push(expr);
-
+            
             // Consume optional semicolon
             if !self.matches(&Token::Semicolon) {
                 // If no semicolon, we expect the next token to be RBrace
@@ -711,6 +792,31 @@ impl<'src> Parser<'src> {
 
         // Parse first element
         let first_expr = self.parse_expr()?;
+
+        // The generator syntax uses `|`, which is also the boolean OR token.
+        // If parsing consumed it as `left | ident` and the next token is `in`,
+        // recover that shape as a vector generator.
+        if self.check(&Token::In) {
+            if let Expr::BinaryOp { op: BinOp::Or, left, right, .. } = &first_expr {
+                if let Expr::Ident { name: var, .. } = right.as_ref() {
+                    self.expect(&Token::In, "expected 'in' after generator variable")?;
+                    let iterable = self.parse_expr()?;
+                    let rbracket = self.expect(&Token::RBracket, "expected ']' to close vector")?;
+
+                    let span = Span {
+                        start: start_span.start,
+                        end: rbracket.span.end,
+                    };
+
+                    return Some(Expr::VectorGen {
+                        element: left.clone(),
+                        var: var.clone(),
+                        iterable: Box::new(iterable),
+                        span,
+                    });
+                }
+            }
+        }
 
         // Check for generator pattern: "|"
         if self.matches(&Token::Pipe) {
@@ -1000,6 +1106,7 @@ impl<'src> Parser<'src> {
             Expr::VectorLit { elements, .. } => Expr::VectorLit { elements, span: new_span },
             Expr::VectorGen { element, var, iterable, .. } => Expr::VectorGen { element, var, iterable, span: new_span },
             Expr::Index { object, index, .. } => Expr::Index { object, index, span: new_span },
+            Expr::Lambda { params, return_type, body, .. } => Expr::Lambda { params, return_type, body, span: new_span },
         }
     }
 
@@ -1331,8 +1438,12 @@ impl<'src> Parser<'src> {
                 };
                 self.advance();
 
-                self.expect(&Token::Colon, "expected ':' after parameter name in protocol")?;
-                let (param_ty, end_span) = self.parse_type_expr()?;
+                let (param_ty, end_span) = if self.matches(&Token::Colon) {
+                    let (ty, span) = self.parse_type_expr()?;
+                    (Some(ty), span)
+                } else {
+                    (None, self.current.span)
+                };
                 let p_span = Span { start: param_start.start, end: end_span.end };
                 sig_params.push(SigParam { name: param_name, ty: param_ty, span: p_span });
 
@@ -1347,8 +1458,12 @@ impl<'src> Parser<'src> {
                     };
                     self.advance();
 
-                    self.expect(&Token::Colon, "expected ':' after parameter name")?;
-                    let (pty, end_span) = self.parse_type_expr()?;
+                    let (pty, end_span) = if self.matches(&Token::Colon) {
+                        let (ty, span) = self.parse_type_expr()?;
+                        (Some(ty), span)
+                    } else {
+                        (None, self.current.span)
+                    };
                     let ps = Span { start: param_start.start, end: end_span.end };
                     sig_params.push(SigParam { name: pname, ty: pty, span: ps });
                 }
@@ -1405,6 +1520,7 @@ impl HasSpan for Expr {
             Expr::VectorLit { span, .. } => *span,
             Expr::VectorGen { span, .. } => *span,
             Expr::Index { span, .. } => *span,
+            Expr::Lambda { span, .. } => *span,
         }
     }
 }

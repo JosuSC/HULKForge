@@ -334,6 +334,8 @@ pub struct TokenStream<'src> {
     /// Lexical errors found during tokenization.
     /// The parser can inspect them after parsing.
     pub errors: Vec<LexError>,
+    /// Buffer to allow limited lookahead without consuming the inner iterator.
+    buffer: std::collections::VecDeque<SpannedToken>,
 }
 
 impl<'src> TokenStream<'src> {
@@ -343,22 +345,28 @@ impl<'src> TokenStream<'src> {
             index:       LineIndex::new(source),
             src_len:     source.len(),
             errors:      Vec::new(),
+            buffer:      std::collections::VecDeque::new(),
         }
     }
 
     /// Tokenize the entire source at once.
     /// Returns the tokens (including EOF at the end) and collects errors.
     pub fn tokenize_all(source: &'src str) -> (Vec<SpannedToken>, Vec<LexError>) {
-        let mut stream = Self::new(source);
+        // Tokenize via an internal lexer to collect all tokens and errors.
+        let mut inner = InnerLexer::new(source);
         let mut tokens = Vec::new();
         let mut errors = Vec::new();
         loop {
-            let tok = stream.next_token();
-            let is_eof = tok.token == Token::Eof;
-            tokens.push(tok);
-            if is_eof { break; }
+            match inner.next() {
+                Some(Ok(tok)) => tokens.push(tok),
+                Some(Err(err)) => errors.push(err),
+                None => break,
+            }
         }
-        errors.extend(stream.errors.drain(..));
+        // Append EOF sentinel
+        let index = LineIndex::new(source);
+        let eof_pos = index.eof_pos(source.len());
+        tokens.push(SpannedToken { token: Token::Eof, span: Span { start: eof_pos, end: eof_pos }, slice: String::new() });
         (tokens, errors)
     }
 
@@ -367,28 +375,37 @@ impl<'src> TokenStream<'src> {
     /// and the lexer skips the problematic character to continue.
     /// Guarantees it eventually returns `Token::Eof`.
     pub fn next_token(&mut self) -> SpannedToken {
-        loop {
+        // Ensure buffer has at least one token.
+        self.fill_buffer_up_to(0);
+        let tok = self.buffer.pop_front().unwrap();
+        // If EOF was popped, push it back so subsequent calls still return EOF.
+        if tok.token == Token::Eof {
+            self.buffer.push_front(tok.clone());
+        }
+        tok
+    }
+
+    /// Fill internal buffer up to index `n` (0-based) by consuming the inner iterator.
+    fn fill_buffer_up_to(&mut self, n: usize) {
+        use std::collections::VecDeque;
+        while self.buffer.len() <= n {
             match self.inner.next() {
-                Some(Ok(tok)) => return tok,
-
-                Some(Err(err)) => {
-                    // Collect the error and continue. Never panic.
-                    self.errors.push(err);
-                    // Keep scanning until a valid token or EOF.
-                }
-
+                Some(Ok(tok)) => self.buffer.push_back(tok),
+                Some(Err(err)) => self.errors.push(err),
                 None => {
-                    // Source exhausted: emit EOF and keep returning it
-                    // so the parser can peek() without Option handling.
                     let eof_pos = self.index.eof_pos(self.src_len);
-                    return SpannedToken {
-                        token: Token::Eof,
-                        span:  Span { start: eof_pos, end: eof_pos },
-                        slice: String::new(),
-                    };
+                    let eof_tok = SpannedToken { token: Token::Eof, span: Span { start: eof_pos, end: eof_pos }, slice: String::new() };
+                    self.buffer.push_back(eof_tok);
+                    break;
                 }
             }
         }
+    }
+
+    /// Peek ahead `n` tokens without consuming. `n=0` returns the next token.
+    pub fn peek_n(&mut self, n: usize) -> Option<SpannedToken> {
+        self.fill_buffer_up_to(n);
+        self.buffer.get(n).cloned()
     }
 
     /// Are there accumulated lexical errors?
