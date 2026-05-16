@@ -908,6 +908,11 @@ fn print_expr(expr: &Expr, printer: &TreePrinter) {
             let span_printer = printer.child(true);
             print_span(*span, &span_printer);
         }
+        Expr::Error { span } => {
+            printer.line("ErrorExpr");
+            let span_printer = printer.child(true);
+            print_span(*span, &span_printer);
+        }
     }
 }
 
@@ -931,7 +936,15 @@ pub fn test_expression(src: &str) {
     // Parse
     let ts = TokenStream::new(src);
     let mut parser = Parser::new(ts);
-    match parser.parse_expr() {
+    let expr_result = parser.parse_expr();
+    if !parser.errors.is_empty() {
+        println!("\nParser Errors:");
+        for e in &parser.errors {
+            println!("  {}", e);
+        }
+    }
+
+    match expr_result {
         Some(expr) => {
             println!("\nAST:");
             let printer = TreePrinter::root();
@@ -940,10 +953,7 @@ pub fn test_expression(src: &str) {
             print_expr(&expr, &child);
         }
         None => {
-            println!("\nParser Error:");
-            for e in parser.errors {
-                println!("  {}", e);
-            }
+            println!("\nParser Error: no se pudo construir la expresion");
         }
     }
 }
@@ -957,7 +967,9 @@ pub fn test_program(src: &str) {
     for t in &tokens {
         println!("  {:?} -> {}", t.token, t.span);
     }
-    if !lex_errors.is_empty() {
+
+    let has_lex_errors = !lex_errors.is_empty();
+    if has_lex_errors {
         println!("\nLexer Errors:");
         for e in &lex_errors {
             println!("  {}", e);
@@ -966,16 +978,23 @@ pub fn test_program(src: &str) {
 
     let ts = TokenStream::new(src);
     let mut parser = Parser::new(ts);
-    match parser.parse_program() {
-        Some(program) => {
-            println!("\nAST:");
-            print_program(&program);
-        }
-        None => {
-            println!("\nParser Error:");
-            for e in parser.errors {
-                println!("  {}", e);
-            }
+    let program_result = parser.parse_program();
+
+    let has_parse_errors = !parser.errors.is_empty();
+    if has_parse_errors {
+        println!("\nParser Errors:");
+        for e in &parser.errors {
+            println!("  {}", e);
         }
     }
+
+    // Si hay errores, no seguimos
+    if has_lex_errors || has_parse_errors {
+        println!("\nParser Error: no se pudo construir el programa");
+        return;
+    }
+
+    // Aquí ya NO puede haber errores
+    println!("\nAST:");
+    print_program(&program_result.unwrap());
 }

@@ -103,23 +103,35 @@ impl<'src> Parser<'src> {
         let span = self.current.span;
         let full = format!("[ParseError {}] {}", span, msg);
         self.errors.push(full);
+        self.synchronize();
     }
 
     /// Synchronize to a safe point for error recovery (panic-mode).
     /// Skips tokens until a likely statement/declaration boundary is found.
     fn synchronize(&mut self) {
+        if self.is_at_end() {
+            return;
+        }
         self.advance();
         while !self.is_at_end() {
             match self.peek() {
-                Token::Semicolon | Token::RBrace | Token::Eof 
-                | Token::Function | Token::Type | Token::Protocol => {
+                Token::Semicolon => {
+                    self.advance();
                     break;
                 }
-                _ => {
+                Token::RBrace | Token::RParen | Token::RBracket => {
                     self.advance();
+                    break;
                 }
+                Token::Function | Token::Type | Token::Protocol => break,
+                _ => self.advance(),
             }
         }
+    }
+
+    /// Create a placeholder expression after a parse error.
+    fn error_expr(&self) -> Expr {
+        Expr::Error { span: self.current.span }
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -131,7 +143,10 @@ impl<'src> Parser<'src> {
     /// **Precedence cascade:**
     /// Expr → parse_assign
     pub fn parse_expr(&mut self) -> Option<Expr> {
-        self.parse_assign()
+        match self.parse_assign() {
+            Some(expr) => Some(expr),
+            None => Some(self.error_expr()),
+        }
     }
 
     /// Parse assignment (destructive assignment, right-associative).
@@ -160,7 +175,7 @@ impl<'src> Parser<'src> {
                 }
                 _ => {
                     self.error("assignment target must be an identifier, field access (e.g., x.field), or index (e.g., x[i])");
-                    return None;
+                    return Some(Expr::Error { span: left.span() });
                 }
             }
         }
@@ -436,7 +451,7 @@ impl<'src> Parser<'src> {
                         }
                         _ => {
                             self.error("expected field name after '.'");
-                            return None;
+                            return Some(Expr::Error { span: field_span });
                         }
                     };
 
@@ -603,7 +618,7 @@ impl<'src> Parser<'src> {
                     }
                     _ => {
                         self.error("expected type name after 'new'");
-                        return None;
+                        return Some(Expr::Error { span });
                     }
                 };
                     let (args, rparen_span) = self.parse_arg_list()?;
@@ -690,7 +705,7 @@ impl<'src> Parser<'src> {
                                     return Some(Expr::Lambda { params, return_type, body, span });
                                 } else {
                                     self.error("expected '=>' or '{' after lambda header");
-                                    return None;
+                                    return Some(Expr::Error { span: lparen_span });
                                 }
                             }
                             _ => {}
@@ -726,7 +741,7 @@ impl<'src> Parser<'src> {
 
             _ => {
                 self.error("expected expression");
-                None
+                Some(Expr::Error { span })
             }
         }
     }
@@ -828,7 +843,7 @@ impl<'src> Parser<'src> {
                 }
                 _ => {
                     self.error("expected variable name after '|'");
-                    return None;
+                    return Some(Expr::Error { span: start_span });
                 }
             };
 
@@ -1107,6 +1122,7 @@ impl<'src> Parser<'src> {
             Expr::VectorGen { element, var, iterable, .. } => Expr::VectorGen { element, var, iterable, span: new_span },
             Expr::Index { object, index, .. } => Expr::Index { object, index, span: new_span },
             Expr::Lambda { params, return_type, body, .. } => Expr::Lambda { params, return_type, body, span: new_span },
+            Expr::Error { .. } => Expr::Error { span: new_span },
         }
     }
 
@@ -1120,25 +1136,25 @@ impl<'src> Parser<'src> {
         let mut decls = Vec::new();
 
         // Parse zero or more declarations (Function, Type, Protocol)
-        // On error, call synchronize() to recover and try next declaration
+        // On error, error() triggers synchronize() to recover and try next declaration
         loop {
             match self.peek() {
                 Token::Function => {
                     match self.parse_func_decl() {
                         Some(f) => decls.push(Decl::Function(f)),
-                        None => self.synchronize(),
+                        None => {}
                     }
                 }
                 Token::Type => {
                     match self.parse_type_decl() {
                         Some(t) => decls.push(Decl::Type(t)),
-                        None => self.synchronize(),
+                        None => {}
                     }
                 }
                 Token::Protocol => {
                     match self.parse_protocol_decl() {
                         Some(p) => decls.push(Decl::Protocol(p)),
-                        None => self.synchronize(),
+                        None => {}
                     }
                 }
                 _ => break,
@@ -1521,6 +1537,7 @@ impl HasSpan for Expr {
             Expr::VectorGen { span, .. } => *span,
             Expr::Index { span, .. } => *span,
             Expr::Lambda { span, .. } => *span,
+            Expr::Error { span } => *span,
         }
     }
 }

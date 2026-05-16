@@ -88,6 +88,7 @@ fn eval_expr(expr: &crate::parser::ast::Expr) -> Option<i64> {
                     _ => None,
                 }
             }
+            Expr::Error { .. } => None,
             _ => None,
         }
     }

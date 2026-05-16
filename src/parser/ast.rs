@@ -322,6 +322,11 @@ pub enum Expr {
         body: FuncBody,
         span: Span,
     },
+
+    /// Error placeholder used for recovery after a parse error.
+    Error {
+        span: Span,
+    },
 }
 
 // ── Supporting types ──────────────────────────
