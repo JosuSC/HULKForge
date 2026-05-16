@@ -8,7 +8,7 @@ use struct_printer::test_program; // import test_program directly
 
 
 fn main() {
-    
+
     test_program(r#"
         type A {
             value: Number = 10;
@@ -93,19 +93,25 @@ fn main() {
         };
     "#);
 
+
     // test_program(r#"
-    //     function sum_until(max : Number): Number => {
+    //    let evens = [ x * 2 | x in [1, 2, 3, 4, 5] ] in
+    //    print(evens);
+    // "#);
+
+    // test_program(r#"
+    //     function sum_until(max : Number): Number {
     //         let result = 0, i = 0 in
     //         while (i < max) {
     //             result := result + i;
     //             i := i + 1;
     //         };
     //         result
-    //     };
+    //     }
     // "#);
 
     // test_program(r#"
-    //     function sum_vec(v): Number => {
+    //     function sum_vec(v): Number {
     //         let total = 0 in
     //         for (i in v) {
     //             if (i < 0) {
@@ -117,11 +123,11 @@ fn main() {
     //             };
     //         };
     //         total
-    //     };
+    //     }
     // "#);
 
     // test_program(r#"
-    //     function factorial(n: Number): Number => {
+    //     function factorial(n: Number): Number {
     //         let result = 1, i = 1 in {
     //             while (i <= n) {
     //                 result := result * i;
@@ -129,12 +135,7 @@ fn main() {
     //             };
     //             result
     //         }
-    //     };
-    // "#);
-
-    // test_program(r#"
-    //     let evens = [ x * 2 | x in [1, 2, 3, 4, 5] ];
-    //     evens;
+    //     }
     // "#);
 
     // test_program(r#"
@@ -157,22 +158,15 @@ fn main() {
     // "#);
 
     // test_program(r#"
-    //     function make_adder(n): Function => {
-    //         function (x): Number => { x + n }
-    //     };
-    //     make_adder(5)(3);
-    // "#);
-
-    // test_program(r#"
     //     let v = [1, 2, 3, 4] in v[2];
     // "#);
 
     // test_program(r#"
-    //     function f(a, b): Number => { if (a > b) { a } else { b } };
-    //     function g(): Number => {
+    //     function f(a, b): Number { if (a > b) { a } else { b } }
+    //     function g(): Number {
     //         let r = f(10, 20) in
     //         r
-    //     };
+    //     }
     //     g();
     // "#);
 
@@ -187,7 +181,7 @@ fn main() {
     // "#);
 
     // test_program(r#"
-    //     function nested(a) : Number => {
+    //     function nested(a) : Number {
     //         let sum = 0 in
     //         for (i in a) {
     //             for (j in i) {
@@ -195,7 +189,7 @@ fn main() {
     //             };
     //         };
     //         sum
-    //     };
-	// "#);
+    //     }
+    // "#);
 }
 
