@@ -958,7 +958,13 @@ pub fn test_expression(src: &str) {
     }
 }
 
-pub fn test_program(src: &str) {
+pub fn test_program(skip: bool, src: &str) {
+    // Si skip es false, no hacemos nada
+    if !skip {
+        println!("Test skipped.");
+        return;
+    }
+
     println!("\n=== Test: Program ===");
     println!("Source: {}", src);
 
