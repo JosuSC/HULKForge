@@ -14,6 +14,7 @@ enum SimpleType {
     Number,
     String,
     Boolean,
+    Named(String),
     Vector(Box<SimpleType>),
 }
 
@@ -23,6 +24,7 @@ impl SimpleType {
             SimpleType::Number => "Number".to_string(),
             SimpleType::String => "String".to_string(),
             SimpleType::Boolean => "Boolean".to_string(),
+            SimpleType::Named(name) => name.clone(),
             SimpleType::Vector(inner) => format!("Vector<{}>", inner.display_name()),
         }
     }
@@ -554,12 +556,130 @@ impl SemanticChecker {
                     self.check_expr(arg);
                 }
             }
-            Expr::BinaryOp { left, right, .. } => {
+            Expr::BinaryOp { op, left, right, span } => {
                 self.check_expr(left);
                 self.check_expr(right);
+
+                let left_ty = self.infer_simple_type(left);
+                let right_ty = self.infer_simple_type(right);
+
+                match op {
+                    BinOp::And | BinOp::Or => {
+                        if let Some(lt) = &left_ty {
+                            if *lt != SimpleType::Boolean {
+                                self.report(*span, format!(
+                                    "operador lógico requiere Boolean (lado izquierdo: {})",
+                                    lt.display_name()
+                                ));
+                            }
+                        }
+                        if let Some(rt) = &right_ty {
+                            if *rt != SimpleType::Boolean {
+                                self.report(*span, format!(
+                                    "operador lógico requiere Boolean (lado derecho: {})",
+                                    rt.display_name()
+                                ));
+                            }
+                        }
+                    }
+                    BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div | BinOp::Mod | BinOp::Pow => {
+                        if let Some(lt) = &left_ty {
+                            if *lt != SimpleType::Number {
+                                self.report(*span, format!(
+                                    "operador aritmético requiere Number (lado izquierdo: {})",
+                                    lt.display_name()
+                                ));
+                            }
+                        }
+                        if let Some(rt) = &right_ty {
+                            if *rt != SimpleType::Number {
+                                self.report(*span, format!(
+                                    "operador aritmético requiere Number (lado derecho: {})",
+                                    rt.display_name()
+                                ));
+                            }
+                        }
+                    }
+                    BinOp::Lt | BinOp::Gt | BinOp::LtEq | BinOp::GtEq => {
+                        if let Some(lt) = &left_ty {
+                            if *lt != SimpleType::Number {
+                                self.report(*span, format!(
+                                    "operador relacional requiere Number (lado izquierdo: {})",
+                                    lt.display_name()
+                                ));
+                            }
+                        }
+                        if let Some(rt) = &right_ty {
+                            if *rt != SimpleType::Number {
+                                self.report(*span, format!(
+                                    "operador relacional requiere Number (lado derecho: {})",
+                                    rt.display_name()
+                                ));
+                            }
+                        }
+                    }
+                    BinOp::Eq | BinOp::NotEq => {
+                        if let (Some(lt), Some(rt)) = (&left_ty, &right_ty) {
+                            if lt != rt {
+                                self.report(*span, format!(
+                                    "operador de igualdad requiere operandos del mismo tipo ({} vs {})",
+                                    lt.display_name(),
+                                    rt.display_name()
+                                ));
+                            }
+                        }
+                    }
+                    BinOp::Concat => {
+                        if let (Some(lt), Some(rt)) = (&left_ty, &right_ty) {
+                            if lt != &SimpleType::String && rt != &SimpleType::String {
+                                self.report(*span, format!(
+                                    "operador de concatenación requiere String en al menos un operando ({} vs {})",
+                                    lt.display_name(),
+                                    rt.display_name()
+                                ));
+                            }
+                        }
+                    }
+                    BinOp::ConcatSpace => {
+                        if let (Some(lt), Some(rt)) = (&left_ty, &right_ty) {
+                            let is_string_concat = lt == &SimpleType::String || rt == &SimpleType::String;
+                            let is_vector_concat = matches!(lt, SimpleType::Vector(_))
+                                && matches!(rt, SimpleType::Vector(_))
+                                && lt == rt;
+
+                            if !is_string_concat && !is_vector_concat {
+                                self.report(*span, format!(
+                                    "operador de concatenación requiere String o vectores del mismo tipo ({} vs {})",
+                                    lt.display_name(),
+                                    rt.display_name()
+                                ));
+                            }
+                        }
+                    }
+                }
             }
-            Expr::UnaryOp { operand, .. } => {
+            Expr::UnaryOp { op, operand, span } => {
                 self.check_expr(operand);
+                if let Some(ot) = self.infer_simple_type(operand) {
+                    match op {
+                        UnaryOp::Neg => {
+                            if ot != SimpleType::Number {
+                                self.report(*span, format!(
+                                    "operador unario '-' requiere Number (se encontró {})",
+                                    ot.display_name()
+                                ));
+                            }
+                        }
+                        UnaryOp::Not => {
+                            if ot != SimpleType::Boolean {
+                                self.report(*span, format!(
+                                    "operador unario '!' requiere Boolean (se encontró {})",
+                                    ot.display_name()
+                                ));
+                            }
+                        }
+                    }
+                }
             }
             Expr::IsType { expr, ty, span } => {
                 self.check_expr(expr);
@@ -571,15 +691,39 @@ impl SemanticChecker {
             }
             Expr::If { condition, then_expr, elif_branches, else_expr, .. } => {
                 self.check_expr(condition);
+                if let Some(ct) = self.infer_simple_type(condition) {
+                    if ct != SimpleType::Boolean {
+                        self.report(expr_span(condition), format!(
+                            "condición de 'if' debe ser Boolean (se encontró {})",
+                            ct.display_name()
+                        ));
+                    }
+                }
                 self.with_scope(|this| this.check_expr(then_expr));
                 for branch in elif_branches {
                     self.check_expr(&branch.condition);
+                    if let Some(ct) = self.infer_simple_type(&branch.condition) {
+                        if ct != SimpleType::Boolean {
+                            self.report(expr_span(&branch.condition), format!(
+                                "condición de 'elif' debe ser Boolean (se encontró {})",
+                                ct.display_name()
+                            ));
+                        }
+                    }
                     self.with_scope(|this| this.check_expr(&branch.body));
                 }
                 self.with_scope(|this| this.check_expr(else_expr));
             }
             Expr::While { condition, body, .. } => {
                 self.check_expr(condition);
+                if let Some(ct) = self.infer_simple_type(condition) {
+                    if ct != SimpleType::Boolean {
+                        self.report(expr_span(condition), format!(
+                            "condición de 'while' debe ser Boolean (se encontró {})",
+                            ct.display_name()
+                        ));
+                    }
+                }
                 self.with_scope(|this| this.check_expr(body));
             }
             Expr::For { var, iterable, body, .. } => {
@@ -603,6 +747,14 @@ impl SemanticChecker {
                     self.ctx.push_scope();
                     scopes_pushed += 1;
                     self.define_var(&binding.name, binding.span);
+                    if let Some(simple_ty) = binding
+                        .ty
+                        .as_ref()
+                        .and_then(simple_type_from_type_expr)
+                        .or_else(|| self.infer_simple_type(&binding.init))
+                    {
+                        self.ctx.set_var_type(&binding.name, simple_ty);
+                    }
                 }
                 self.check_expr(body);
                 for _ in 0..scopes_pushed {
@@ -673,7 +825,7 @@ impl SemanticChecker {
                     ));
                 }
             }
-            Expr::FieldAccess { object, .. } => {
+            Expr::FieldAccess { .. } => {
                 self.check_expr(target);
             }
             Expr::Index { object, index, .. } => {
@@ -763,6 +915,18 @@ impl SemanticChecker {
             Expr::Number { .. } => Some(SimpleType::Number),
             Expr::StringLit { .. } => Some(SimpleType::String),
             Expr::Bool { .. } => Some(SimpleType::Boolean),
+            Expr::Ident { name, .. } => self
+                .ctx
+                .var_type(name)
+                .or_else(|| builtin_const_simple_type(name)),
+            Expr::New { type_name, .. } => {
+                if is_placeholder(type_name) {
+                    None
+                } else {
+                    Some(SimpleType::Named(type_name.clone()))
+                }
+            }
+            Expr::AsType { ty, .. } => simple_type_from_type_expr(ty),
             Expr::UnaryOp { op, operand, .. } => {
                 let inner = self.infer_simple_type(operand)?;
                 match (op, inner) {
@@ -803,9 +967,20 @@ impl SemanticChecker {
                             None
                         }
                     }
-                    BinOp::Concat | BinOp::ConcatSpace => {
+                    BinOp::Concat => {
                         if left_ty == SimpleType::String || right_ty == SimpleType::String {
                             Some(SimpleType::String)
+                        } else {
+                            None
+                        }
+                    }
+                    BinOp::ConcatSpace => {
+                        if left_ty == SimpleType::String || right_ty == SimpleType::String {
+                            Some(SimpleType::String)
+                        } else if matches!((&left_ty, &right_ty), (SimpleType::Vector(_), SimpleType::Vector(_)))
+                            && left_ty == right_ty
+                        {
+                            Some(left_ty)
                         } else {
                             None
                         }
@@ -867,6 +1042,7 @@ impl SemanticChecker {
 #[derive(Clone)]
 struct Context {
     var_scopes: Vec<HashSet<String>>,
+    var_types: Vec<HashMap<String, SimpleType>>,
     functions: HashMap<String, HashSet<usize>>,
     macros: HashMap<String, HashSet<usize>>,
     types: HashMap<String, TypeInfo>,
@@ -894,6 +1070,7 @@ impl Context {
     fn new() -> Self {
         Self {
             var_scopes: vec![HashSet::new()],
+            var_types: vec![HashMap::new()],
             functions: HashMap::new(),
             macros: HashMap::new(),
             types: HashMap::new(),
@@ -908,10 +1085,12 @@ impl Context {
 
     fn push_scope(&mut self) {
         self.var_scopes.push(HashSet::new());
+        self.var_types.push(HashMap::new());
     }
 
     fn pop_scope(&mut self) {
         self.var_scopes.pop();
+        self.var_types.pop();
     }
 
     fn define_var(&mut self, name: &str) -> bool {
@@ -921,8 +1100,23 @@ impl Context {
         false
     }
 
+    fn set_var_type(&mut self, name: &str, ty: SimpleType) {
+        if let Some(scope) = self.var_types.last_mut() {
+            scope.insert(name.to_string(), ty);
+        }
+    }
+
     fn is_var_defined(&self, name: &str) -> bool {
         self.var_scopes.iter().rev().any(|s| s.contains(name))
+    }
+
+    fn var_type(&self, name: &str) -> Option<SimpleType> {
+        for scope in self.var_types.iter().rev() {
+            if let Some(ty) = scope.get(name) {
+                return Some(ty.clone());
+            }
+        }
+        None
     }
 
     fn insert_function(&mut self, name: &str, arity: usize) -> bool {
@@ -1025,6 +1219,28 @@ fn builtin_consts() -> HashSet<String> {
     ["PI", "E", "()"].iter().map(|s| s.to_string()).collect()
 }
 
+fn builtin_const_simple_type(name: &str) -> Option<SimpleType> {
+    match name {
+        "PI" | "E" => Some(SimpleType::Number),
+        _ => None,
+    }
+}
+
+fn simple_type_from_type_expr(ty: &TypeExpr) -> Option<SimpleType> {
+    match ty {
+        TypeExpr::Named(name) => match name.as_str() {
+            "Number" => Some(SimpleType::Number),
+            "String" => Some(SimpleType::String),
+            "Boolean" => Some(SimpleType::Boolean),
+            _ => Some(SimpleType::Named(name.clone())),
+        },
+        TypeExpr::Iterable(inner) | TypeExpr::Vector(inner) => {
+            simple_type_from_type_expr(inner).map(|inner_ty| SimpleType::Vector(Box::new(inner_ty)))
+        }
+        TypeExpr::Functor { .. } => None,
+    }
+}
+
 fn arity_set(values: &[usize]) -> HashSet<usize> {
     values.iter().copied().collect()
 }
@@ -1091,6 +1307,53 @@ fn macro_param_span(param: &MacroParam) -> Span {
         MacroParam::Block { span, .. }
         | MacroParam::Symbolic { span, .. }
         | MacroParam::Placeholder { span, .. } => *span,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::lexer::lexer::TokenStream;
+    use crate::parser::Parser;
+
+    fn semantic_errors(source: &str) -> Vec<SemanticError> {
+        let stream = TokenStream::new(source);
+        let mut parser = Parser::new(stream);
+        let program = parser
+            .parse_program()
+            .expect("the test source should parse successfully");
+        check_program(&program)
+    }
+
+    #[test]
+    fn equality_rejects_variables_with_different_types() {
+        let errors = semantic_errors(r#"
+            let left: String = "hola", right: Number = 42 in left == right;
+        "#);
+
+        assert!(
+            errors.iter().any(|error| error.message.contains("operador de igualdad")),
+            "se esperaba un error de igualdad entre tipos distintos, se obtuvo: {:?}",
+            errors
+        );
+    }
+
+    #[test]
+    fn equality_accepts_variables_with_same_type() {
+        let errors = semantic_errors(r#"
+            let left: String = "hola", right: String = "mundo" in left == right;
+        "#);
+
+        assert!(errors.is_empty(), "no deberia haber errores: {:?}", errors);
+    }
+
+    #[test]
+    fn relational_accepts_number_annotations() {
+        let errors = semantic_errors(r#"
+            let left: Number = 1, right: Number = 2 in left < right;
+        "#);
+
+        assert!(errors.is_empty(), "no deberia haber errores: {:?}", errors);
     }
 }
 

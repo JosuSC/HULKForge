@@ -378,13 +378,17 @@ fn main() {
     "#);
 
     test_program(false, r#"
+        let x: Number=2, y: Number=4 in(
+        let b: String="text", h: Boolean = true in
         if (true) {
             1
-        } elif (false) {
+        } elif (false and ((true or x>y) and (y>10))) {
             2
-        } else {
+        } elif (true == h) {
             3
-        };
+        } else {
+            4
+        };)
     "#);
 
     test_program(false, r#"
