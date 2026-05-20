@@ -4,14 +4,13 @@ mod lexer;          // lexer module
 mod parser;         // parser module
 mod evaluator;      // evaluator module
 mod struct_printer; // structure printer module
-#[path = "semantic/semantic.rs"]
 mod semantic;       // semantic checker module
 use struct_printer::test_program; // import test_program directly
 
 
 fn main() {
 
-    test_program(true, r#"
+    test_program(false, r#"
         type A {
             value: Number = 10;
             getValue() => self.value;
@@ -95,6 +94,7 @@ fn main() {
         };
     "#);
 
+    // Hay que seguir trabajando sobre este caso
     test_program(false, r#"
         function square(x: Number): Number => x ^ 2;
 
@@ -366,7 +366,7 @@ fn main() {
     "#);
 
     test_program(false, r#"
-        function factorial(n: Number): Number {
+        function factorial(n: Number, j: String): Number {
             let result = 1, i = 1 in {
                 while (i <= n) {
                     result := result * i;
@@ -375,16 +375,26 @@ fn main() {
                 result
             }
         }
+        if (factorial (1, "testing_param") > 2 & true) {
+            print("Factorial of 1 is 1");
+        } else {
+            print("Error in factorial function");
+        };
+
     "#);
 
     test_program(false, r#"
+        let x: Number=2, y: Number=4 in(
+        let b: String="text", h: Boolean = true in
         if (true) {
             1
-        } elif (false) {
+        } elif (false & ((true | x>y) & (y>10))) {
             2
-        } else {
+        } elif (true == h) {
             3
-        };
+        } else {
+            4
+        };)
     "#);
 
     test_program(false, r#"
