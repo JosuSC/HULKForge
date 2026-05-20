@@ -103,10 +103,9 @@ pub enum Token {
     #[token("let")]      Let,
     #[token("in")]       In,
     #[token("if")]       If,
-    #[token("and")]      And,
     #[token("elif")]     Elif,
     #[token("else")]     Else,
-    #[token("or")]       Or,
+    
     #[token("while")]    While,
     #[token("for")]      For,
     #[token("function")] Function,

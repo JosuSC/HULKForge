@@ -279,7 +279,8 @@ impl<'src> Parser<'src> {
     fn parse_or(&mut self) -> Option<Expr> {
         let mut left = self.parse_and()?;
 
-        while self.matches(&Token::Or) {
+        // Accept the symbol `|` (Token::Pipe) as the OR operator.
+        while self.matches(&Token::Pipe) {
             let right = self.parse_and()?;
             let span = Span {
                 start: left.span().start,
@@ -302,7 +303,8 @@ impl<'src> Parser<'src> {
     fn parse_and(&mut self) -> Option<Expr> {
         let mut left = self.parse_not()?;
 
-        while self.matches(&Token::And) {
+        // Accept the symbol `&` (Token::Amp) as the AND operator.
+        while self.matches(&Token::Amp) {
             let right = self.parse_not()?;
             let span = Span {
                 start: left.span().start,
