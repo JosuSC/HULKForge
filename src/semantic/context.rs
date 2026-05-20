@@ -31,6 +31,8 @@ pub struct Context {
 #[derive(Clone)]
 struct TypeInfo {
     param_count: usize,
+    attrs: HashSet<String>,
+    methods: HashMap<String, HashMap<usize, CallableSignature>>,
 }
 
 /// Information about the currently checked type (attributes and methods).
@@ -130,7 +132,33 @@ impl Context {
     pub(super) fn insert_type(&mut self, name: &str, param_count: usize) {
         self.types
             .entry(name.to_string())
-            .or_insert(TypeInfo { param_count });
+            .or_insert(TypeInfo { param_count, attrs: HashSet::new(), methods: HashMap::new() });
+    }
+
+    /// Set recorded attributes and methods for a previously registered type.
+    pub(super) fn set_type_members(
+        &mut self,
+        name: &str,
+        attrs: HashSet<String>,
+        methods: HashMap<String, HashMap<usize, CallableSignature>>,
+    ) {
+        if let Some(t) = self.types.get_mut(name) {
+            t.attrs = attrs;
+            t.methods = methods;
+        }
+    }
+
+    /// Get the signature of a method for a given type name and arity.
+    pub(super) fn type_method_signature(
+        &self,
+        type_name: &str,
+        method: &str,
+        arity: usize,
+    ) -> Option<&CallableSignature> {
+        self.types
+            .get(type_name)
+            .and_then(|t| t.methods.get(method))
+            .and_then(|by_arity| by_arity.get(&arity))
     }
 
     /// Register a protocol name.

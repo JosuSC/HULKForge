@@ -365,8 +365,8 @@ fn main() {
         }
     "#);
 
-    test_program(false, r#"
-        function factorial(n: Number): Number {
+    test_program(true, r#"
+        function factorial(n: Number, j: String): Number {
             let result = 1, i = 1 in {
                 while (i <= n) {
                     result := result * i;
@@ -375,7 +375,11 @@ fn main() {
                 result
             }
         }
-        factorial (1)
+        if (factorial (1, "testing_param") & true) {
+            print("Factorial of 1 is 1");
+        } else {
+            print("Error in factorial function");
+        };
     "#);
 
     test_program(false, r#"

@@ -296,6 +296,8 @@ impl SemanticChecker {
             attrs,
             methods,
         };
+        // Record the discovered attributes and methods in the global context
+        self.ctx.set_type_members(&decl.name, current_type.attrs.clone(), current_type.methods.clone());
         let prev_type = self.ctx.current_type.take();
         let prev_in_method = self.ctx.in_method;
         self.ctx.current_type = Some(current_type);
@@ -559,6 +561,7 @@ impl SemanticChecker {
                 for arg in args {
                     self.check_expr(arg);
                 }
+
                 if self.ctx.in_method && is_self_ref(object) {
                     if let Some(signature) = self
                         .ctx
@@ -570,11 +573,31 @@ impl SemanticChecker {
                     {
                         self.check_callable_args(method, args, &signature.params, "method", *span);
                     } else {
-                            self.report(*span, format!(
-                                "method '{}' with arity {} not defined on current type",
-                                method,
-                                args.len()
-                            ));
+                        self.report(*span, format!(
+                            "method '{}' with arity {} not defined on current type",
+                            method,
+                            args.len()
+                        ));
+                    }
+                } else {
+                    // Try to resolve method from the static type of the object
+                    if let Some(obj_ty) = self.infer_simple_type(object) {
+                        if let SimpleType::Named(type_name) = obj_ty {
+                            if let Some(signature) = self
+                                .ctx
+                                .type_method_signature(&type_name, method, args.len())
+                                .cloned()
+                            {
+                                self.check_callable_args(method, args, &signature.params, "method", *span);
+                            } else {
+                                self.report(*span, format!(
+                                    "method '{}' with arity {} not defined on type '{}'",
+                                    method,
+                                    args.len(),
+                                    type_name
+                                ));
+                            }
+                        }
                     }
                 }
             }
@@ -1016,6 +1039,15 @@ impl SemanticChecker {
                         .and_then(|current| current.methods.get(method))
                         .and_then(|by_arity| by_arity.get(&args.len()))
                         .and_then(|signature| signature.return_type.clone());
+                }
+                // If the object has a named static type, try to resolve the method signature
+                if let Some(obj_ty) = self.infer_simple_type(object) {
+                    if let SimpleType::Named(type_name) = obj_ty {
+                        return self
+                            .ctx
+                            .type_method_signature(&type_name, method, args.len())
+                            .and_then(|s| s.return_type.clone());
+                    }
                 }
                 None
             }

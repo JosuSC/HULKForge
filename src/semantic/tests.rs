@@ -336,3 +336,53 @@ fn field_access_on_self_reports_missing_attribute() {
 
     assert_has_error(&errors, "attribute 'no_existe' not defined on current type");
 }
+
+#[test]
+fn reports_invalid_argument_types_for_method_call_on_variable() {
+    let errors = semantic_errors(r#"
+        type A {
+            m(texto: String, cantidad: Number) {
+                0
+            }
+        }
+
+        let a = new A() in {
+            a.m(10, "hola");
+            0
+        };
+    "#);
+
+    assert_has_error(&errors, "method 'm' argument 1 expects String, found Number");
+}
+
+#[test]
+fn logical_and_requires_boolean_operands_number_left() {
+    let errors = semantic_errors(r#"
+        true and 1;
+    "#);
+        let errors = semantic_errors(r#"
+            true & 1;
+        "#);
+
+        assert_has_error(&errors, "logical operator requires Boolean");
+}
+
+#[test]
+fn logical_or_requires_boolean_operands_number_left() {
+    let errors = semantic_errors(r#"
+            1 | false;
+        "#);
+
+        assert_has_error(&errors, "logical operator requires Boolean");
+}
+
+#[test]
+fn function_call_in_and_reports_nonboolean() {
+    let errors = semantic_errors(r#"
+            function factorial(n: Number, j: String): Number => n;
+
+            if (factorial(1, "x") & true) { 0 } else { 0 };
+        "#);
+
+        assert_has_error(&errors, "logical operator requires Boolean");
+}
