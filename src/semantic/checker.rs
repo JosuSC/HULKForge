@@ -218,6 +218,24 @@ impl SemanticChecker {
             self.define_var(&param.name, param.span);
         }
         self.check_func_body(&decl.body);
+
+        let inferred_return_type = self.infer_callable_body_type(&decl.body);
+        self.check_return_type(
+            "function",
+            &decl.name,
+            decl.return_type.as_ref(),
+            inferred_return_type.clone(),
+            decl.span,
+        );
+        if decl.return_type.as_ref().and_then(simple_type_from_type_expr).is_none() {
+            if let Some(inferred_return_type) = inferred_return_type {
+                self.ctx.insert_function_signature(
+                    &decl.name,
+                    callable_params_from_params(&decl.params),
+                    Some(inferred_return_type),
+                );
+            }
+        }
         self.ctx.pop_scope();
     }
 
@@ -404,6 +422,26 @@ impl SemanticChecker {
             self.define_var(&param.name, param.span);
         }
         self.check_func_body(&method.body);
+
+        let inferred_return_type = self.infer_callable_body_type(&method.body);
+        self.check_return_type(
+            "method",
+            &method.name,
+            method.return_type.as_ref(),
+            inferred_return_type.clone(),
+            method.span,
+        );
+        if method.return_type.as_ref().and_then(simple_type_from_type_expr).is_none() {
+            if let Some(inferred_return_type) = inferred_return_type {
+                if let Some(current_type) = self.ctx.current_type.as_mut() {
+                    if let Some(methods) = current_type.methods.get_mut(&method.name) {
+                        if let Some(signature) = methods.get_mut(&method.params.len()) {
+                            signature.return_type = Some(inferred_return_type);
+                        }
+                    }
+                }
+            }
+        }
         self.ctx.pop_scope();
         self.ctx.in_method = prev_in_method;
     }
@@ -1030,6 +1068,26 @@ impl SemanticChecker {
                 }
                 None
             }
+                Expr::If { then_expr, elif_branches, else_expr, .. } => {
+                    let then_ty = self.infer_simple_type(then_expr)?;
+                    for branch in elif_branches {
+                        let branch_ty = self.infer_simple_type(&branch.body)?;
+                        if branch_ty != then_ty {
+                            return None;
+                        }
+                    }
+                    let else_ty = self.infer_simple_type(else_expr)?;
+                    if else_ty == then_ty {
+                        Some(then_ty)
+                    } else {
+                        None
+                    }
+                }
+                Expr::While { body, .. } => self.infer_simple_type(body),
+                Expr::For { body, .. } => self.infer_simple_type(body),
+                Expr::Let { body, .. } => self.infer_simple_type(body),
+                Expr::Assign { value, .. } => self.infer_simple_type(value),
+                Expr::Block { exprs, .. } => exprs.last().and_then(|expr| self.infer_simple_type(expr)),
             Expr::MethodCall { object, method, args, .. } => {
                 if is_self_ref(object) {
                     return self
@@ -1193,6 +1251,265 @@ impl SemanticChecker {
                     ),
                 );
                 break;
+            }
+        }
+    }
+
+    /// Infer the return type of a callable body if the expression type is known.
+    fn infer_callable_body_type(&self, body: &FuncBody) -> Option<SimpleType> {
+        let mut ctx = self.ctx.clone();
+        match body {
+            FuncBody::Inline(expr) | FuncBody::Block(expr) => {
+                self.infer_expr_with_scopes(expr, &mut ctx)
+            }
+        }
+    }
+
+    /// Conservative type inference that preserves local scopes created inside expressions.
+    fn infer_expr_with_scopes(&self, expr: &Expr, ctx: &mut Context) -> Option<SimpleType> {
+        match expr {
+            Expr::Number { .. } => Some(SimpleType::Number),
+            Expr::StringLit { .. } => Some(SimpleType::String),
+            Expr::Bool { .. } => Some(SimpleType::Boolean),
+            Expr::Ident { name, .. } => ctx.var_type(name).or_else(|| builtin_const_simple_type(name)),
+            Expr::New { type_name, .. } => {
+                if is_placeholder(type_name) {
+                    None
+                } else {
+                    Some(SimpleType::Named(type_name.clone()))
+                }
+            }
+            Expr::AsType { ty, .. } => simple_type_from_type_expr(ty),
+            Expr::Call { callee, args, .. } => {
+                if let Expr::Ident { name, .. } = &**callee {
+                    return ctx
+                        .function_signature(name)
+                        .and_then(|signature| signature.return_type.clone())
+                        .or_else(|| {
+                            ctx.builtin_function_signature(name, args.len())
+                                .and_then(|signature| signature.return_type.clone())
+                        });
+                }
+                None
+            }
+            Expr::MethodCall { object, method, args, .. } => {
+                if is_self_ref(object) {
+                    return ctx
+                        .current_type
+                        .as_ref()
+                        .and_then(|current| current.methods.get(method))
+                        .and_then(|by_arity| by_arity.get(&args.len()))
+                        .and_then(|signature| signature.return_type.clone());
+                }
+                if let Some(obj_ty) = self.infer_expr_with_scopes(object, ctx) {
+                    if let SimpleType::Named(type_name) = obj_ty {
+                        return ctx
+                            .type_method_signature(&type_name, method, args.len())
+                            .and_then(|signature| signature.return_type.clone());
+                    }
+                }
+                None
+            }
+            Expr::UnaryOp { op, operand, .. } => {
+                let inner = self.infer_expr_with_scopes(operand, ctx)?;
+                match (op, inner) {
+                    (UnaryOp::Neg, SimpleType::Number) => Some(SimpleType::Number),
+                    (UnaryOp::Not, SimpleType::Boolean) => Some(SimpleType::Boolean),
+                    _ => None,
+                }
+            }
+            Expr::BinaryOp { op, left, right, .. } => {
+                let left_ty = self.infer_expr_with_scopes(left, ctx)?;
+                let right_ty = self.infer_expr_with_scopes(right, ctx)?;
+                match op {
+                    BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div | BinOp::Mod | BinOp::Pow => {
+                        if left_ty == SimpleType::Number && right_ty == SimpleType::Number {
+                            Some(SimpleType::Number)
+                        } else {
+                            None
+                        }
+                    }
+                    BinOp::And | BinOp::Or => {
+                        if left_ty == SimpleType::Boolean && right_ty == SimpleType::Boolean {
+                            Some(SimpleType::Boolean)
+                        } else {
+                            None
+                        }
+                    }
+                    BinOp::Eq | BinOp::NotEq => {
+                        if left_ty == right_ty {
+                            Some(SimpleType::Boolean)
+                        } else {
+                            None
+                        }
+                    }
+                    BinOp::Lt | BinOp::Gt | BinOp::LtEq | BinOp::GtEq => {
+                        if left_ty == SimpleType::Number && right_ty == SimpleType::Number {
+                            Some(SimpleType::Boolean)
+                        } else {
+                            None
+                        }
+                    }
+                    BinOp::Concat => {
+                        if left_ty == SimpleType::String || right_ty == SimpleType::String {
+                            Some(SimpleType::String)
+                        } else {
+                            None
+                        }
+                    }
+                    BinOp::ConcatSpace => {
+                        if left_ty == SimpleType::String || right_ty == SimpleType::String {
+                            Some(SimpleType::String)
+                        } else if matches!((&left_ty, &right_ty), (SimpleType::Vector(_), SimpleType::Vector(_)))
+                            && left_ty == right_ty
+                        {
+                            Some(left_ty)
+                        } else {
+                            None
+                        }
+                    }
+                }
+            }
+            Expr::If { then_expr, elif_branches, else_expr, .. } => {
+                let then_ty = {
+                    let mut branch_ctx = ctx.clone();
+                    branch_ctx.push_scope();
+                    self.infer_expr_with_scopes(then_expr, &mut branch_ctx)?
+                };
+                for branch in elif_branches {
+                    let branch_ty = {
+                        let mut branch_ctx = ctx.clone();
+                        branch_ctx.push_scope();
+                        self.infer_expr_with_scopes(&branch.body, &mut branch_ctx)?
+                    };
+                    if branch_ty != then_ty {
+                        return None;
+                    }
+                }
+                let else_ty = {
+                    let mut branch_ctx = ctx.clone();
+                    branch_ctx.push_scope();
+                    self.infer_expr_with_scopes(else_expr, &mut branch_ctx)?
+                };
+                if else_ty == then_ty {
+                    Some(then_ty)
+                } else {
+                    None
+                }
+            }
+            Expr::While { body, .. } => {
+                let mut loop_ctx = ctx.clone();
+                loop_ctx.push_scope();
+                self.infer_expr_with_scopes(body, &mut loop_ctx)
+            }
+            Expr::For { var, body, .. } => {
+                let mut loop_ctx = ctx.clone();
+                loop_ctx.push_scope();
+                loop_ctx.define_var(var);
+                self.infer_expr_with_scopes(body, &mut loop_ctx)
+            }
+            Expr::Let { bindings, body, .. } => {
+                let mut local_ctx = ctx.clone();
+                for binding in bindings {
+                    let init_ty = self.infer_expr_with_scopes(&binding.init, &mut local_ctx);
+                    local_ctx.push_scope();
+                    local_ctx.define_var(&binding.name);
+                    if let Some(ty) = binding
+                        .ty
+                        .as_ref()
+                        .and_then(simple_type_from_type_expr)
+                        .or(init_ty)
+                    {
+                        local_ctx.set_var_type(&binding.name, ty);
+                    }
+                }
+                self.infer_expr_with_scopes(body, &mut local_ctx)
+            }
+            Expr::Assign { value, .. } => self.infer_expr_with_scopes(value, ctx),
+            Expr::Block { exprs, .. } => {
+                if exprs.is_empty() {
+                    return None;
+                }
+                let mut local_ctx = ctx.clone();
+                local_ctx.push_scope();
+                let mut result = None;
+                for expr in exprs {
+                    result = self.infer_expr_with_scopes(expr, &mut local_ctx);
+                }
+                result
+            }
+            Expr::VectorLit { elements, .. } => {
+                let mut expected: Option<SimpleType> = None;
+                for element in elements {
+                    let Some(element_ty) = self.infer_expr_with_scopes(element, ctx) else {
+                        continue;
+                    };
+                    match &expected {
+                        Some(expected_ty) if expected_ty != &element_ty => return None,
+                        None => expected = Some(element_ty),
+                        _ => {}
+                    }
+                }
+                expected.map(|ty| SimpleType::Vector(Box::new(ty)))
+            }
+            Expr::VectorGen { element, iterable, .. } => {
+                self.infer_expr_with_scopes(iterable, ctx)?;
+                self.infer_expr_with_scopes(element, ctx)
+            }
+            Expr::Index { object, .. } => self.infer_expr_with_scopes(object, ctx),
+            Expr::Lambda { params, return_type, body, .. } => {
+                let mut lambda_ctx = ctx.clone();
+                lambda_ctx.push_scope();
+                for param in params {
+                    lambda_ctx.define_var(&param.name);
+                    if let Some(ty) = &param.ty {
+                        if let Some(simple_ty) = simple_type_from_type_expr(ty) {
+                            lambda_ctx.set_var_type(&param.name, simple_ty);
+                        }
+                    }
+                }
+                if let Some(ty) = return_type {
+                    simple_type_from_type_expr(ty)
+                } else {
+                    match body {
+                        FuncBody::Inline(expr) | FuncBody::Block(expr) => {
+                            self.infer_expr_with_scopes(expr, &mut lambda_ctx)
+                        }
+                    }
+                }
+            }
+            Expr::Error { .. } => None,
+            Expr::IsType { .. } => Some(SimpleType::Boolean),
+            Expr::SelfRef { .. } | Expr::Base { .. } => self.infer_simple_type(expr),
+            Expr::FieldAccess { .. } => self.infer_simple_type(expr),
+        }
+    }
+
+    /// Compare an inferred return type against an optional declared return type.
+    fn check_return_type(
+        &mut self,
+        callable_kind: &str,
+        callable_name: &str,
+        declared_return_type: Option<&TypeExpr>,
+        inferred_return_type: Option<SimpleType>,
+        span: Span,
+    ) {
+        let declared_return_type = declared_return_type.and_then(simple_type_from_type_expr);
+        if let (Some(expected), Some(actual)) = (
+            declared_return_type.as_ref(),
+            inferred_return_type.as_ref(),
+        ) {
+            if expected != actual {
+                self.report(
+                    span,
+                    format!(
+                        "{} '{}' return type expects {}, found {}",
+                        callable_kind,
+                        callable_name,
+                        expected.display_name(),
+                        actual.display_name()
+                    ),
+                );
             }
         }
     }

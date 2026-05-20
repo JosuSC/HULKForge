@@ -365,7 +365,7 @@ fn main() {
         }
     "#);
 
-    test_program(true, r#"
+    test_program(false, r#"
         function factorial(n: Number, j: String): Number {
             let result = 1, i = 1 in {
                 while (i <= n) {
@@ -375,11 +375,12 @@ fn main() {
                 result
             }
         }
-        if (factorial (1, "testing_param") & true) {
+        if (factorial (1, "testing_param") > 2 & true) {
             print("Factorial of 1 is 1");
         } else {
             print("Error in factorial function");
         };
+
     "#);
 
     test_program(false, r#"

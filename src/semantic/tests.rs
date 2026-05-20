@@ -356,15 +356,59 @@ fn reports_invalid_argument_types_for_method_call_on_variable() {
 }
 
 #[test]
+fn inferred_method_return_type_is_used_in_later_method_calls() {
+    let errors = semantic_errors(r#"
+        type A {
+            value() => 1;
+
+            twice() {
+                self.value() + self.value()
+            }
+        }
+
+        0;
+    "#);
+
+    assert!(errors.is_empty(), "expected no errors, got: {:?}", errors);
+}
+
+#[test]
+fn method_return_type_mismatch_is_reported() {
+    let errors = semantic_errors(r#"
+        type A {
+            m(): Number => "hola";
+        }
+        0;
+    "#);
+
+    assert_has_error(&errors, "method 'm' return type expects Number, found String");
+}
+
+#[test]
+fn factorial_example_return_type_mismatch_is_reported() {
+    let errors = semantic_errors(r#"
+        function factorial(n: Number, j: String): String {
+            let result = 1, i = 1 in {
+                while (i <= n) {
+                    result := result * i;
+                    i := i + 1;
+                };
+                result
+            }
+        }
+        0;
+    "#);
+
+    assert_has_error(&errors, "function 'factorial' return type expects String, found Number");
+}
+
+#[test]
 fn logical_and_requires_boolean_operands_number_left() {
     let errors = semantic_errors(r#"
-        true and 1;
+        true & 1;
     "#);
-        let errors = semantic_errors(r#"
-            true & 1;
-        "#);
 
-        assert_has_error(&errors, "logical operator requires Boolean");
+    assert_has_error(&errors, "logical operator requires Boolean");
 }
 
 #[test]
