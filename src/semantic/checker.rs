@@ -1250,7 +1250,6 @@ impl SemanticChecker {
                         actual_ty.display_name()
                     ),
                 );
-                break;
             }
         }
     }

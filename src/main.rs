@@ -357,14 +357,14 @@ fn main() {
     "#);
 
     // Analizar semantico array como parámetro
-    test_program(false, r#"
-        function nested(a) : Number {
+    test_program(true, r#"
+        function nested(a: Number) : Number {
             let sum = 0 in {
-            for (i in a) {
-                for (j in i) {
-                    if (j % 2 == 0) { sum := sum + j } else { sum := sum + 0 };
+                for (i in a) {
+                    for (j in i) {
+                        if (j % 2 == 0) { sum := sum + j } else { sum := sum + 0 };
+                    };
                 };
-            };
             sum
             }
         }

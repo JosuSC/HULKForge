@@ -139,6 +139,26 @@ fn reports_invalid_argument_types_for_user_function() {
 }
 
 #[test]
+fn reports_all_invalid_argument_types_for_user_function() {
+    let errors = semantic_errors(r#"
+        function nested(a: Number, b: String) : Number {
+            let sum = 0 in {
+                for (i in a) {
+                    for (j in i) {
+                        if (j % 2 == 0) { sum := sum + j } else { sum := sum + 0 };
+                    };
+                };
+                sum
+            }
+        }
+        nested(true, true)
+    "#);
+
+    assert_has_error(&errors, "call to 'nested' argument 1 expects Number, found Boolean");
+    assert_has_error(&errors, "call to 'nested' argument 2 expects String, found Boolean");
+}
+
+#[test]
 fn reports_invalid_argument_types_for_method_call_on_self() {
     let errors = semantic_errors(r#"
         type A {
