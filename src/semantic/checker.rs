@@ -219,6 +219,13 @@ impl SemanticChecker {
         }
         self.check_func_body(&decl.body);
 
+        let mut inferred_param_types = callable_params_from_params(&decl.params);
+        for (index, param) in decl.params.iter().enumerate() {
+            if inferred_param_types[index].is_none() {
+                inferred_param_types[index] = self.ctx.var_type(&param.name);
+            }
+        }
+
         let inferred_return_type = self.infer_callable_body_type(&decl.body);
         self.check_return_type(
             "function",
@@ -229,12 +236,22 @@ impl SemanticChecker {
         );
         if decl.return_type.as_ref().and_then(simple_type_from_type_expr).is_none() {
             if let Some(inferred_return_type) = inferred_return_type {
+                self.ctx.insert_function_signature(&decl.name, inferred_param_types, Some(inferred_return_type));
+            } else {
                 self.ctx.insert_function_signature(
                     &decl.name,
-                    callable_params_from_params(&decl.params),
-                    Some(inferred_return_type),
+                    inferred_param_types,
+                    self.ctx
+                        .function_signature(&decl.name)
+                        .and_then(|signature| signature.return_type.clone()),
                 );
             }
+        } else if inferred_param_types != callable_params_from_params(&decl.params) {
+            self.ctx.insert_function_signature(
+                &decl.name,
+                inferred_param_types,
+                decl.return_type.as_ref().and_then(simple_type_from_type_expr),
+            );
         }
         self.ctx.pop_scope();
     }
@@ -423,6 +440,13 @@ impl SemanticChecker {
         }
         self.check_func_body(&method.body);
 
+        let mut inferred_param_types = callable_params_from_params(&method.params);
+        for (index, param) in method.params.iter().enumerate() {
+            if inferred_param_types[index].is_none() {
+                inferred_param_types[index] = self.ctx.var_type(&param.name);
+            }
+        }
+
         let inferred_return_type = self.infer_callable_body_type(&method.body);
         self.check_return_type(
             "method",
@@ -437,8 +461,21 @@ impl SemanticChecker {
                     if let Some(methods) = current_type.methods.get_mut(&method.name) {
                         if let Some(signature) = methods.get_mut(&method.params.len()) {
                             signature.return_type = Some(inferred_return_type);
+                            signature.params = inferred_param_types;
                         }
                     }
+                }
+            } else if let Some(current_type) = self.ctx.current_type.as_mut() {
+                if let Some(methods) = current_type.methods.get_mut(&method.name) {
+                    if let Some(signature) = methods.get_mut(&method.params.len()) {
+                        signature.params = inferred_param_types;
+                    }
+                }
+            }
+        } else if let Some(current_type) = self.ctx.current_type.as_mut() {
+            if let Some(methods) = current_type.methods.get_mut(&method.name) {
+                if let Some(signature) = methods.get_mut(&method.params.len()) {
+                    signature.params = inferred_param_types;
                 }
             }
         }
@@ -708,6 +745,8 @@ impl SemanticChecker {
                                 ));
                             }
                         }
+                        self.constrain_number_operand(left, right_ty.as_ref());
+                        self.constrain_number_operand(right, left_ty.as_ref());
                     }
                     BinOp::Lt | BinOp::Gt | BinOp::LtEq | BinOp::GtEq => {
                         if let Some(lt) = &left_ty {
@@ -726,6 +765,8 @@ impl SemanticChecker {
                                 ));
                             }
                         }
+                        self.constrain_number_operand(left, right_ty.as_ref());
+                        self.constrain_number_operand(right, left_ty.as_ref());
                     }
                     BinOp::Eq | BinOp::NotEq => {
                         if let (Some(lt), Some(rt)) = (&left_ty, &right_ty) {
@@ -779,7 +820,7 @@ impl SemanticChecker {
                                 ));
                             }
                         }
-                        UnaryOp::Not => {
+                            UnaryOp::Not => {
                             if ot != SimpleType::Boolean {
                                 self.report(*span, format!(
                                     "unary operator '!' requires Boolean (found {})",
@@ -788,6 +829,8 @@ impl SemanticChecker {
                             }
                         }
                     }
+                } else if matches!(op, UnaryOp::Neg) {
+                    self.constrain_number_operand(operand, Some(&SimpleType::Number));
                 }
             }
             Expr::IsType { expr, ty, span } => {
@@ -837,9 +880,13 @@ impl SemanticChecker {
             }
             Expr::For { var, iterable, body, .. } => {
                 self.check_expr(iterable);
+                self.mark_iterable_usage(iterable);
                 self.with_scope(|this| {
                     this.define_var(var, expr_span(expr));
                     this.check_expr(body);
+                    if let Some(loop_item_ty) = this.ctx.var_type(var) {
+                        this.record_iterable_element_type(iterable, loop_item_ty);
+                    }
                 });
             }
             Expr::Let { bindings, body, span } => {
@@ -896,11 +943,15 @@ impl SemanticChecker {
                 self.with_scope(|this| {
                     this.define_var(var, expr_span(expr));
                     this.check_expr(element);
+                    if let Some(loop_item_ty) = this.ctx.var_type(var) {
+                        this.record_iterable_element_type(iterable, loop_item_ty);
+                    }
                 });
             }
             Expr::Index { object, index, .. } => {
                 self.check_expr(object);
                 self.check_expr(index);
+                self.mark_iterable_usage(object);
             }
             Expr::Lambda { params, return_type, body, .. } => {
                 let mut seen = HashSet::new();
@@ -1250,6 +1301,74 @@ impl SemanticChecker {
                         actual_ty.display_name()
                     ),
                 );
+            }
+        }
+    }
+
+    /// Record that an expression is being used as an iterable/vector when possible.
+    fn mark_iterable_usage(&mut self, expr: &Expr) {
+        if let Expr::Ident { name, span } = expr {
+            if let Some(existing_ty) = self.ctx.var_type(name) {
+                if !matches!(existing_ty, SimpleType::Vector(_)) {
+                    self.report(
+                        *span,
+                        format!(
+                            "iterable expression expects Vector, found {}",
+                            existing_ty.display_name()
+                        ),
+                    );
+                }
+            }
+        }
+    }
+
+    /// Constrain an identifier operand to Number when the surrounding operation requires it.
+    fn constrain_number_operand(&mut self, expr: &Expr, other_ty: Option<&SimpleType>) {
+        if !matches!(other_ty, Some(SimpleType::Number)) {
+            return;
+        }
+
+        if let Expr::Ident { name, .. } = expr {
+            if self.ctx.var_type(name).is_none() && self.ctx.is_var_defined(name) {
+                self.ctx.set_var_type_in_scope(name, SimpleType::Number);
+            }
+        }
+    }
+
+    /// Update the iterable expression to a Vector of the inferred loop element type.
+    fn record_iterable_element_type(&mut self, expr: &Expr, element_ty: SimpleType) {
+        if let Expr::Ident { name, span } = expr {
+            match self.ctx.var_type(name) {
+                Some(SimpleType::Vector(existing_inner)) => {
+                    if *existing_inner != element_ty {
+                        self.report(
+                            *span,
+                            format!(
+                                "iterable expression expects Vector<{}>, found Vector<{}>",
+                                element_ty.display_name(),
+                                existing_inner.display_name()
+                            ),
+                        );
+                    }
+                }
+                Some(existing_ty) => {
+                    self.report(
+                        *span,
+                        format!(
+                            "iterable expression expects Vector<{}>, found {}",
+                            element_ty.display_name(),
+                            existing_ty.display_name()
+                        ),
+                    );
+                }
+                None => {
+                    if self.ctx.is_var_defined(name) {
+                        self.ctx.set_var_type_in_scope(
+                            name,
+                            SimpleType::Vector(Box::new(element_ty)),
+                        );
+                    }
+                }
             }
         }
     }

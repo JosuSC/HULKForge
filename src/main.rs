@@ -286,7 +286,7 @@ fn main() {
                 total
             };
         }
-        print(sum_vec([-1, 0, 1, 2, -3]));
+        print(sum_vec([1, 2, 3, 4, 5]));
     "#);
 
     test_program(false, r#"
@@ -356,8 +356,7 @@ fn main() {
         };
     "#);
 
-    // Analizar semantico array como parámetro
-    test_program(true, r#"
+    test_program(false, r#"
         function nested(a: Number) : Number {
             let sum = 0 in {
                 for (i in a) {

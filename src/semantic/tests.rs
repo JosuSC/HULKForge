@@ -139,6 +139,46 @@ fn reports_invalid_argument_types_for_user_function() {
 }
 
 #[test]
+fn infers_iterable_parameter_type_from_for_loop_and_rejects_number_argument() {
+    let errors = semantic_errors(r#"
+        function sum_vec(v): Number {
+            let total = 0 in {
+                for (i in v) {
+                    total := total + i;
+                };
+                total
+            }
+        }
+        sum_vec(1);
+    "#);
+
+    assert_has_error(&errors, "call to 'sum_vec' argument 1 expects Vector");
+}
+
+#[test]
+fn infers_vector_number_argument_from_for_loop_body() {
+    let errors = semantic_errors(r#"
+        function sum_vec(v): Number {
+            let total = 0 in {
+                for (i in v) {
+                    if (i < 0) {
+                        total := total + (0 - i);
+                    } elif (i == 0) {
+                        total := total + 0;
+                    } else {
+                        total := total + i;
+                    };
+                };
+                total
+            }
+        }
+        sum_vec([1, 2]);
+    "#);
+
+    assert!(errors.is_empty(), "expected no semantic errors, got: {:?}", errors);
+}
+
+#[test]
 fn reports_all_invalid_argument_types_for_user_function() {
     let errors = semantic_errors(r#"
         function nested(a: Number, b: String) : Number {

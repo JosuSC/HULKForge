@@ -90,6 +90,17 @@ impl Context {
         }
     }
 
+    /// Set an inferred simple type for the nearest scope that defines the variable.
+    pub(super) fn set_var_type_in_scope(&mut self, name: &str, ty: SimpleType) -> bool {
+        for index in (0..self.var_scopes.len()).rev() {
+            if self.var_scopes[index].contains(name) {
+                self.var_types[index].insert(name.to_string(), ty);
+                return true;
+            }
+        }
+        false
+    }
+
     /// Check if a variable is defined in any active scope.
     pub(super) fn is_var_defined(&self, name: &str) -> bool {
         self.var_scopes.iter().rev().any(|s| s.contains(name))
