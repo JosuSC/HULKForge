@@ -805,17 +805,46 @@ impl<'src> Parser<'src> {
                     }
                 }
 
-                // Fallback: regular grouped expression OR parenthesized block
-                // Allow parentheses to contain one or more expressions separated by ';',
-                // so forms like `( a := a + 1; a )` or `(expr)` are accepted.
+                // Fallback: grouped expression or parenthesized sequence.
+                // Parentheses can wrap a single expression, or a semicolon-separated
+                // sequence that behaves like a block body: `(e1; e2; e3;)`.
                 self.advance(); // consume '('
-                let inner = match self.parse_expr() {
-                    Some(e) => e,
-                    None => self.error_expr(),
-                };
+
+                if self.check(&Token::RParen) {
+                    self.error("expected expression inside parentheses");
+                    return Some(Expr::Error { span: lparen_span });
+                }
+
+                let mut exprs = Vec::new();
+                let mut saw_semicolon = false;
+
+                loop {
+                    let expr = match self.parse_expr() {
+                        Some(e) => e,
+                        None => self.error_expr(),
+                    };
+                    exprs.push(expr);
+
+                    if self.matches(&Token::Semicolon) {
+                        saw_semicolon = true;
+                        if self.check(&Token::RParen) {
+                            break;
+                        }
+                        continue;
+                    }
+
+                    break;
+                }
+
                 let rparen = self.expect(&Token::RParen, "expected ')' after expression")?;
                 let span = Span { start: lparen_span.start, end: rparen.span.end };
-                Some(Self::set_expr_span(inner, span))
+
+                if exprs.len() == 1 && !saw_semicolon {
+                    let inner = exprs.pop().unwrap();
+                    Some(Self::set_expr_span(inner, span))
+                } else {
+                    Some(Expr::Block { exprs, span })
+                }
                 
             }
 

@@ -10,10 +10,10 @@ use struct_printer::test_program; // import test_program directly
 
 fn main() {
 
-    test_program(true, r#"
+    test_program(false, r#"
         
         function cuadrado(x) => x * x;
-        print(42)
+
         function saludo(nombre) => "Hola " @ nombre;
 
         {
@@ -23,8 +23,6 @@ fn main() {
             }
         }
     "#);
-
-    
 
     // Hay que seguir trabajando sobre este caso
     test_program(false, r#"
@@ -338,12 +336,13 @@ fn main() {
         };
     "#);
 
-    test_program(false, r#"
-        let v = [1, 2, (2+4), 3, 4] in v[2];
+    test_program(true, r#"
+        {let v = [1, 2, (2+4), 3, 4] in v[2];
     "#);
 
     test_program(false, r#"
         function f(a, b): Number { if (a > b) { a } else { b } }
+        
         function g(): Number {
             let r = f(10, 20) in
             r
@@ -352,25 +351,29 @@ fn main() {
     "#);
 
     test_program(false, r#"
-        { let x = 1 in { x := x + 1; x } };
+        { let x = 1 in ( x := x + 1; x ); }
     "#);
 
+    // Analizr el ";" luego del let
     test_program(false, r#"
         let s = "hello" in {
             s
         };
     "#);
 
+    // Analizar semantico array como parámetro
     test_program(false, r#"
         function nested(a) : Number {
-            let sum = 0 in
-            for (i in a) {
-                for (j in i) {
-                    if (j % 2 == 0) { sum := sum + j } else { sum := sum + 0 };
+            let sum = 0 in (
+                for (i in a) {
+                    for (j in i) {
+                        if (j % 2 == 0) { sum := sum + j } else { sum := sum + 0 };
+                    };
                 };
-            };
-            sum
+                sum
+            );
         }
+        nested(5)
     "#);
 }
 

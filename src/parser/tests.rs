@@ -273,6 +273,18 @@ fn test_grouped_expression() {
 }
 
 #[test]
+fn test_let_with_parenthesized_sequence_body() {
+    let source = r#"
+        let sum = 0 in (
+            sum := sum + 1;
+            sum;
+        )
+    "#;
+    let result = parse_source(source);
+    assert!(result.is_some(), "Parenthesized let body with semicolons should parse");
+}
+
+#[test]
 fn test_multiple_functions() {
     let source = r#"
         function f() => 1;
