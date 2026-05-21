@@ -10,18 +10,12 @@ use struct_printer::test_program; // import test_program directly
 
 fn main() {
 
-    test_program(true, r#"
-        
-        function cuadrado(x) => x * x;
-        print(42)
-        function saludo(nombre) => "Hola " @ nombre;
 
-        {
-            let n = 5 in {
-                print("El cuadrado de " @ n @ " es " @ cuadrado(n));
-                print(saludo("Jery"));
-            }
-        }
+
+    test_program(true, r#"
+
+        let x: Number = 42 in print(x);   
+
     "#);
 
     
@@ -363,14 +357,16 @@ fn main() {
 
     test_program(false, r#"
         function nested(a) : Number {
-            let sum = 0 in
+            let sum = 0 in {
             for (i in a) {
                 for (j in i) {
                     if (j % 2 == 0) { sum := sum + j } else { sum := sum + 0 };
                 };
             };
             sum
+            }
         }
+        nested(5)
     "#);
 }
 
