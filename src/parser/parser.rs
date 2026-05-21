@@ -1433,12 +1433,13 @@ impl<'src> Parser<'src> {
     }
 
     let expr = Box::new(self.parse_expr()?);
+    self.matches(&Token::Semicolon);
     if !self.is_at_end() {
         self.error_no_sync("unexpected tokens after global expression");
         return None;
     }
 
-    self.matches(&Token::Semicolon);
+    
 
     let span = Span { start: start_span.start, end: expr.span().end };
     Some(Program { decls, expr, span })

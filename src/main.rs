@@ -10,18 +10,10 @@ use struct_printer::test_program; // import test_program directly
 
 fn main() {
 
-    test_program(false, r#"
-        
-        function cuadrado(x) => x * x;
+    test_program(true, r#"
 
-        function saludo(nombre) => "Hola " @ nombre;
+        let x: Number = 42 in print(x);   
 
-        {
-            let n = 5 in {
-                print("El cuadrado de " @ n @ " es " @ cuadrado(n));
-                print(saludo("Jery"));
-            }
-        }
     "#);
 
     // Hay que seguir trabajando sobre este caso
@@ -364,14 +356,14 @@ fn main() {
     // Analizar semantico array como parámetro
     test_program(false, r#"
         function nested(a) : Number {
-            let sum = 0 in (
-                for (i in a) {
-                    for (j in i) {
-                        if (j % 2 == 0) { sum := sum + j } else { sum := sum + 0 };
-                    };
+            let sum = 0 in {
+            for (i in a) {
+                for (j in i) {
+                    if (j % 2 == 0) { sum := sum + j } else { sum := sum + 0 };
                 };
-                sum
-            );
+            };
+            sum
+            }
         }
         nested(5)
     "#);
