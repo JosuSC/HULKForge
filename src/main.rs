@@ -10,10 +10,8 @@ use struct_printer::test_program; // import test_program directly
 
 fn main() {
 
-    test_program(true, r#"
-
-        let x: Number = 42 in print(x);   
-
+    test_program(false, r#"
+        print(42); 
     "#);
 
     // Hay que seguir trabajando sobre este caso
@@ -262,29 +260,33 @@ fn main() {
 
     test_program(false, r#"
         function sum_until(max : Number): Number {
-            let result = 0, i = 0 in 
-            while (i < max) {
-                result := result + i;
-                i := i + 1;
-            };
-            result
+            let result = 0, i = 0 in (
+                while (i < max) {
+                    result := result + i;
+                    i := i + 1;
+                };
+                result
+            )
         }
+        print(sum_until(10));
     "#);
 
     test_program(false, r#"
         function sum_vec(v): Number {
-            let total = 0 in
-            for (i in v) {
-                if (i < 0) {
-                    total := total + (0 - i);
-                } elif (i == 0) {
-                    total := total + 0;
-                } else {
-                    total := total + i;
+            let total = 0 in {
+                for (i in v) {
+                    if (i < 0) {
+                        total := total + (0 - i);
+                    } elif (i == 0) {
+                        total := total + 0;
+                    } else {
+                        total := total + i;
+                    };
                 };
+                total
             };
-            total
         }
+        print(sum_vec([-1, 0, 1, 2, -3]));
     "#);
 
     test_program(false, r#"
@@ -328,8 +330,9 @@ fn main() {
         };
     "#);
 
-    test_program(true, r#"
-        {let v = [1, 2, (2+4), 3, 4] in v[2];
+    test_program(false, r#"
+        let v = [1, 2, (2+4), 3, 4] in 
+        v[2];
     "#);
 
     test_program(false, r#"
@@ -342,14 +345,14 @@ fn main() {
         g();
     "#);
 
+    // Analizar
     test_program(false, r#"
-        { let x = 1 in ( x := x + 1; x ); }
-    "#);
+        let x = 1 in (
+            x := x + 1; 
+        );
 
-    // Analizr el ";" luego del let
-    test_program(false, r#"
         let s = "hello" in {
-            s
+            print(s);
         };
     "#);
 
