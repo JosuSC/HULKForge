@@ -10,7 +10,7 @@ use struct_printer::test_program; // import test_program directly
 
 fn main() {
 
-    test_program(true, r#"
+    test_program(false, r#"
         function g(a): Number => a+5;
 
         let b: Number = 4*2 in
@@ -49,7 +49,7 @@ fn main() {
         };
     "#);
 
-    test_program(false, r#"
+    test_program(true, r#"
         type B {
             d = 0;
 
@@ -60,7 +60,7 @@ fn main() {
 
             get_c() => self.c;
         }
-        type Person(name, age) inherits A {
+        type Person(name: String, age: Number) inherits A {
             name: String = name;
             age: Number = age;
 

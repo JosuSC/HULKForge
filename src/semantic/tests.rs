@@ -608,6 +608,23 @@ fn method_return_type_mismatch_is_reported() {
 }
 
 #[test]
+fn attribute_type_mismatch_is_reported() {
+    let errors = semantic_errors(r#"
+        type A {
+        }
+
+        type Person(name: String, age: Number) inherits A {
+            name: String = age;
+            age: Number = age;
+        }
+
+        0;
+    "#);
+
+    assert_has_error(&errors, "attribute 'name' expects String, found Number");
+}
+
+#[test]
 fn factorial_example_return_type_mismatch_is_reported() {
     let errors = semantic_errors(r#"
         function factorial(n: Number, j: String): String {

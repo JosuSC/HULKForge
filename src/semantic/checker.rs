@@ -290,6 +290,11 @@ impl SemanticChecker {
         self.ctx.push_scope();
         for param in &decl.type_params {
             self.define_var(&param.name, param.span);
+            if let Some(ty) = &param.ty {
+                if let Some(simple_ty) = simple_type_from_type_expr(ty) {
+                    self.ctx.set_var_type(&param.name, simple_ty);
+                }
+            }
         }
 
         if let Some(inherits) = &decl.inherits {
@@ -514,6 +519,22 @@ impl SemanticChecker {
             self.check_type_expr(ty, attr.span);
         }
         self.check_expr(&attr.init);
+
+        if let Some(expected) = attr.ty.as_ref().and_then(simple_type_from_type_expr) {
+            if let Some(actual) = self.infer_simple_type(&attr.init) {
+                if expected != actual {
+                    self.report(
+                        attr.span,
+                        format!(
+                            "attribute '{}' expects {}, found {}",
+                            attr.name,
+                            expected.display_name(),
+                            actual.display_name()
+                        ),
+                    );
+                }
+            }
+        }
     }
 
     /// Validate an inheritance clause: parent exists and args match.
