@@ -11,6 +11,15 @@ use struct_printer::test_program; // import test_program directly
 fn main() {
 
     test_program(true, r#"
+        function g(a) => a+5;
+
+        let b = 4*2 in
+            let a: Number = g(5) in {
+                print(a);
+            };
+    "#);
+
+    test_program(false, r#"
         {
             let a = 42, let mod = a % 3, let b: Boolean = true in
                 print(
@@ -357,7 +366,7 @@ fn main() {
                     result := result * i;
                     i := i + 1;
                 };
-                result
+                results
             }
         }
         if (factorial (1, "testing_param") > 2 & true) {

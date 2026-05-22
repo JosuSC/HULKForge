@@ -902,6 +902,22 @@ impl SemanticChecker {
                     self.check_expr(&binding.init);
                     if let Some(ty) = &binding.ty {
                         self.check_type_expr(ty, binding.span);
+                        if let (Some(expected), Some(actual)) = (
+                            simple_type_from_type_expr(ty),
+                            self.infer_simple_type(&binding.init),
+                        ) {
+                            if expected != actual {
+                                self.report(
+                                    binding.span,
+                                    format!(
+                                        "let binding '{}' expects {}, found {}",
+                                        binding.name,
+                                        expected.display_name(),
+                                        actual.display_name()
+                                    ),
+                                );
+                            }
+                        }
                     }
                     self.ctx.push_scope();
                     scopes_pushed += 1;

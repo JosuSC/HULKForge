@@ -354,6 +354,18 @@ fn let_binding_reports_undefined_type_annotation() {
 }
 
 #[test]
+fn let_binding_reports_type_mismatch_for_initializer() {
+    let errors = semantic_errors(r#"
+        let b = 4 * 2 in
+            let a: Boolean = b + 4 in {
+                print(a);
+            };
+    "#);
+
+    assert_has_error(&errors, "let binding 'a' expects Boolean, found Number");
+}
+
+#[test]
 fn protocol_extends_reports_undefined_parent_protocol() {
     let errors = semantic_errors(r#"
         protocol P extends Q {
