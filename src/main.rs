@@ -11,10 +11,10 @@ use struct_printer::test_program; // import test_program directly
 fn main() {
 
     test_program(true, r#"
-        function g(a) => a+5;
+        function g(a): Number => a+5;
 
-        let b = 4*2 in
-            let a: Number = g(5) in {
+        let b: String = 4*2 in
+            let a: Number = g(5) + b in {
                 print(a);
             };
     "#);

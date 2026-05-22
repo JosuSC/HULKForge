@@ -54,6 +54,7 @@ pub fn check_program(program: &Program) -> Vec<SemanticError> {
 pub struct SemanticChecker {
     ctx: Context,
     errors: Vec<SemanticError>,
+    function_return_issues: HashMap<String, String>,
 }
 
 impl SemanticChecker {
@@ -62,6 +63,7 @@ impl SemanticChecker {
         Self {
             ctx: Context::new(),
             errors: Vec::new(),
+            function_return_issues: HashMap::new(),
         }
     }
 
@@ -234,6 +236,22 @@ impl SemanticChecker {
             inferred_return_type.clone(),
             decl.span,
         );
+        if let (Some(expected), Some(actual)) = (
+            decl.return_type.as_ref().and_then(simple_type_from_type_expr),
+            inferred_return_type.clone(),
+        ) {
+            if expected != actual {
+                self.function_return_issues.insert(
+                    decl.name.clone(),
+                    format!(
+                        "function '{}' has an inconsistent return type: it declares {}, but its body returns {}",
+                        decl.name,
+                        expected.display_name(),
+                        actual.display_name()
+                    ),
+                );
+            }
+        }
         if decl.return_type.as_ref().and_then(simple_type_from_type_expr).is_none() {
             if let Some(inferred_return_type) = inferred_return_type {
                 self.ctx.insert_function_signature(&decl.name, inferred_param_types, Some(inferred_return_type));
@@ -907,15 +925,27 @@ impl SemanticChecker {
                             self.infer_simple_type(&binding.init),
                         ) {
                             if expected != actual {
-                                self.report(
-                                    binding.span,
-                                    format!(
-                                        "let binding '{}' expects {}, found {}",
-                                        binding.name,
-                                        expected.display_name(),
-                                        actual.display_name()
-                                    ),
-                                );
+                                if let Some(note) = self.callable_return_issue_for_expr(&binding.init) {
+                                    self.report(
+                                        binding.span,
+                                        format!(
+                                            "let binding '{}' expected a {}, but found a value of another type; note: {}",
+                                            binding.name,
+                                            expected.display_name(),
+                                            note
+                                        ),
+                                    );
+                                } else {
+                                    self.report(
+                                        binding.span,
+                                        format!(
+                                            "let binding '{}' expects {}, found {}",
+                                            binding.name,
+                                            expected.display_name(),
+                                            actual.display_name()
+                                        ),
+                                    );
+                                }
                             }
                         }
                     }
@@ -1126,6 +1156,20 @@ impl SemanticChecker {
     /// Push a semantic error into the collected errors.
     fn report(&mut self, span: Span, message: String) {
         self.errors.push(SemanticError { span, message });
+    }
+
+    /// If an initializer is a direct call to a function with an inconsistent return type, describe it.
+    fn callable_return_issue_for_expr(&self, expr: &Expr) -> Option<String> {
+        match expr {
+            Expr::Call { callee, .. } => {
+                if let Expr::Ident { name, .. } = &**callee {
+                    self.function_return_issues.get(name).cloned()
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
     }
 
     /// Conservative type inference for use in checks (vectors, numbers, strings).

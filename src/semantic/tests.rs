@@ -366,6 +366,21 @@ fn let_binding_reports_type_mismatch_for_initializer() {
 }
 
 #[test]
+fn let_binding_reports_inconsistent_function_return_note() {
+    let errors = semantic_errors(r#"
+        function g(a): Boolean => a + 5;
+
+        let b = 4 * 2 in
+            let a: String = g(5) in {
+                print(a);
+            };
+    "#);
+
+    assert_has_error(&errors,"function 'g' return type expects Boolean, found Number");
+    assert_has_error(&errors, "let binding 'a' expected a String, but found a value of another type; note: function 'g' has an inconsistent return type: it declares Boolean, but its body returns Number");
+}
+
+#[test]
 fn protocol_extends_reports_undefined_parent_protocol() {
     let errors = semantic_errors(r#"
         protocol P extends Q {
