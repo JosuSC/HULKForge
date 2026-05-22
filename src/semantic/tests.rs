@@ -110,7 +110,7 @@ fn reports_call_to_nonexistent_function() {
 }
 
 #[test]
-fn allows_call_syntax_for_constructible_type_names() {
+fn rejects_call_syntax_for_constructible_type_names() {
     let errors = semantic_errors(r#"
         type Person(name, age) {
             name: String = name;
@@ -121,7 +121,7 @@ fn allows_call_syntax_for_constructible_type_names() {
             people;
     "#);
 
-    assert!(errors.is_empty(), "expected no semantic errors, got: {:?}", errors);
+    assert_has_error(&errors, "must be instantiated with 'new'");
 }
 
 #[test]
@@ -141,7 +141,7 @@ fn uppercase_call_reports_type_arity_errors() {
             age: Number = age;
         }
 
-        Person("Ana");
+        new Person("Ana");
     "#);
 
     assert_has_error(&errors, "type 'Person' requires 2 arguments");
@@ -476,6 +476,62 @@ fn method_call_on_for_loop_variable_uses_iterable_element_type() {
 }
 
 #[test]
+fn inherited_method_is_found_on_subtype_instances() {
+    let errors = semantic_errors(r#"
+        type A {
+            c = 0;
+
+            get_c() => self.c;
+        }
+
+        type Person(name, age) inherits A {
+            name: String = name;
+            age: Number = age;
+        }
+
+        let jery = new Person("Jery", 21) in
+            print(jery.get_c());
+    "#);
+
+    assert!(errors.is_empty(), "expected no errors, got: {:?}", errors);
+}
+
+#[test]
+fn inherited_transitive_method_is_found_on_subtype_instances() {
+    let errors = semantic_errors(r#"
+        type B {
+            d = 0;
+
+            get_d() => self.d;
+        }
+        type A inherits B {
+            c = 0;
+
+            get_c() => self.c;
+        }
+        type Person(name, age) inherits A {
+            name: String = name;
+            age: Number = age;
+
+            greet() => print("Hola, soy " @ self.name @ " y tengo " @ self.age @ " años");
+            get_age() => self.age;
+        }
+
+        {
+            let people = [new Person("Ana", 20), new Person("Luis", 25),  new Person("Jery", 22)], x = 0 in {
+                for (p in people) {
+                    p.greet();
+                };
+                let jery = new Person("Jery", 21) in
+                    print(jery.get_d());
+            }
+        }
+    "#);
+
+    assert!(errors.is_empty(), "expected no errors, got: {:?}", errors);
+}
+
+#[test]
 fn inferred_method_return_type_is_used_in_later_method_calls() {
     let errors = semantic_errors(r#"
         type A {
@@ -488,7 +544,6 @@ fn inferred_method_return_type_is_used_in_later_method_calls() {
 
         0;
     "#);
-
     assert!(errors.is_empty(), "expected no errors, got: {:?}", errors);
 }
 
@@ -604,7 +659,6 @@ fn sum_vec_reports_multiple_semantic_errors() {
     assert_has_error(&errors, "call to 'sum_vec' argument 1 expects Vector");
     assert_has_error(&errors, "arithmetic operator requires Number (right side: String)");
 }
-
 
 #[test]
 fn sum_vec_report_semantic_errors_vector() {
@@ -770,3 +824,33 @@ fn assignment_and_vector_literal_report_multiple_semantic_errors() {
     assert_has_error(&errors, "vector with elements of different types (expected Number, found String)");
     assert_has_error(&errors, "identifier 'ghost' not defined");
 }
+
+#[test]
+fn type_and_vector_report_multiple_semantic_errors() {
+    let errors = semantic_errors(r#"
+        type Person(name, age) {
+            name: String = name;
+            age: Number = age;
+
+            greet() => print("Hola, soy " @ self.name @ " y tengo " @ self.age @ " años");
+            get_age() => self.age;
+        }
+
+        {
+            let people = [new Person("Ana", 20), Person("Luis", 25), Person("Jery", 22)] in {
+                for (p in people) {
+                    p.greetol();
+                }
+                let jery = new Person("Jery", 21) in
+                    print(jery.get_age());
+                print(jery)
+            }
+        }
+    "#);
+
+    assert_has_error(&errors, "type 'Person' must be instantiated with 'new'");
+    assert_has_error(&errors, "type 'Person' must be instantiated with 'new'");
+    assert_has_error(&errors, "method 'greetol' with arity 0 not defined on type 'Person'");
+    assert_has_error(&errors, "identifier 'jery' not defined");
+}
+

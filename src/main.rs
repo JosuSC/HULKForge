@@ -11,18 +11,31 @@ use struct_printer::test_program; // import test_program directly
 fn main() {
 
     test_program(false, r#"
-        type Person(name, age) {
+        type B {
+            d = 0;
+
+            get_d() => self.d;
+        }
+        type A inherits B {
+            c = 0;
+
+            get_c() => self.c;
+        }
+        type Person(name, age) inherits A {
             name: String = name;
             age: Number = age;
 
             greet() => print("Hola, soy " @ self.name @ " y tengo " @ self.age @ " años");
+            get_age() => self.age;
         }
 
         {
-            let people = [Person("Ana", 20), Person("Luis", 25), Person("Jery", 22)] in {
+            let people = [new Person("Ana", 20), new Person("Luis", 25),  new Person("Jery", 22)], x = 0 in {
                 for (p in people) {
                     p.greet();
-                }
+                };
+                let jery = new Person("Jery", 21) in
+                    print(jery.get_d());
             }
         }
     "#);

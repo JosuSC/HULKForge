@@ -332,7 +332,12 @@ impl SemanticChecker {
             methods,
         };
         // Record the discovered attributes and methods in the global context
-        self.ctx.set_type_members(&decl.name, current_type.attrs.clone(), current_type.methods.clone());
+        self.ctx.set_type_members(
+            &decl.name,
+            current_type.parent.clone(),
+            current_type.attrs.clone(),
+            current_type.methods.clone(),
+        );
         let prev_type = self.ctx.current_type.take();
         let prev_in_method = self.ctx.in_method;
         self.ctx.current_type = Some(current_type);
@@ -638,14 +643,7 @@ impl SemanticChecker {
                 }
 
                 if self.ctx.in_method && is_self_ref(object) {
-                    if let Some(signature) = self
-                        .ctx
-                        .current_type
-                        .as_ref()
-                        .and_then(|current| current.methods.get(method))
-                        .and_then(|set| set.get(&args.len()))
-                        .cloned()
-                    {
+                    if let Some(signature) = self.ctx.current_type_method_signature(method, args.len()).cloned() {
                         self.check_callable_args(method, args, &signature.params, "method", *span);
                     } else {
                         self.report(*span, format!(
@@ -1013,31 +1011,17 @@ impl SemanticChecker {
         if is_placeholder(name) {
             return;
         }
-
         let starts_with_uppercase = name
             .chars()
             .next()
             .map(char::is_uppercase)
             .unwrap_or(false);
 
-        if starts_with_uppercase {
-            if !self.ctx.is_constructible_type(name) {
-                self.report(span, format!(
-                    "type '{}' not defined",
-                    name
-                ));
-                return;
-            }
-
-            if let Some(expected) = self.ctx.type_param_count(name) {
-                if expected != args.len() {
-                    self.report(span, format!(
-                        "type '{}' requires {} arguments",
-                        name,
-                        expected
-                    ));
-                }
-            }
+        if self.ctx.is_constructible_type(name) {
+            self.report(span, format!(
+                "type '{}' must be instantiated with 'new'",
+                name
+            ));
             return;
         }
 
@@ -1071,6 +1055,11 @@ impl SemanticChecker {
                 "call to '{}' with invalid arity ({})",
                 name,
                 args.len()
+            ));
+        } else if starts_with_uppercase {
+            self.report(span, format!(
+                "type '{}' not defined",
+                name
             ));
         } else {
             self.report(span, format!(
@@ -1186,10 +1175,7 @@ impl SemanticChecker {
                 if is_self_ref(object) {
                     return self
                         .ctx
-                        .current_type
-                        .as_ref()
-                        .and_then(|current| current.methods.get(method))
-                        .and_then(|by_arity| by_arity.get(&args.len()))
+                        .current_type_method_signature(method, args.len())
                         .and_then(|signature| signature.return_type.clone());
                 }
                 // If the object has a named static type, try to resolve the method signature
@@ -1473,10 +1459,7 @@ impl SemanticChecker {
             Expr::MethodCall { object, method, args, .. } => {
                 if is_self_ref(object) {
                     return ctx
-                        .current_type
-                        .as_ref()
-                        .and_then(|current| current.methods.get(method))
-                        .and_then(|by_arity| by_arity.get(&args.len()))
+                        .current_type_method_signature(method, args.len())
                         .and_then(|signature| signature.return_type.clone());
                 }
                 if let Some(obj_ty) = self.infer_expr_with_scopes(object, ctx) {

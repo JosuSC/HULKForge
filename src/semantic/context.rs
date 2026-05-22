@@ -31,6 +31,7 @@ pub struct Context {
 #[derive(Clone)]
 struct TypeInfo {
     param_count: usize,
+    parent: Option<String>,
     attrs: HashSet<String>,
     methods: HashMap<String, HashMap<usize, CallableSignature>>,
 }
@@ -143,17 +144,24 @@ impl Context {
     pub(super) fn insert_type(&mut self, name: &str, param_count: usize) {
         self.types
             .entry(name.to_string())
-            .or_insert(TypeInfo { param_count, attrs: HashSet::new(), methods: HashMap::new() });
+            .or_insert(TypeInfo {
+                param_count,
+                parent: None,
+                attrs: HashSet::new(),
+                methods: HashMap::new(),
+            });
     }
 
     /// Set recorded attributes and methods for a previously registered type.
     pub(super) fn set_type_members(
         &mut self,
         name: &str,
+        parent: Option<String>,
         attrs: HashSet<String>,
         methods: HashMap<String, HashMap<usize, CallableSignature>>,
     ) {
         if let Some(t) = self.types.get_mut(name) {
+            t.parent = parent;
             t.attrs = attrs;
             t.methods = methods;
         }
@@ -166,10 +174,43 @@ impl Context {
         method: &str,
         arity: usize,
     ) -> Option<&CallableSignature> {
-        self.types
-            .get(type_name)
-            .and_then(|t| t.methods.get(method))
+        let mut current = Some(type_name);
+
+        while let Some(name) = current {
+            let type_info = self.types.get(name)?;
+            if let Some(signature) = type_info
+                .methods
+                .get(method)
+                .and_then(|by_arity| by_arity.get(&arity))
+            {
+                return Some(signature);
+            }
+            current = type_info.parent.as_deref();
+        }
+
+        None
+    }
+
+    /// Get the signature of a method for the current type, following inheritance.
+    pub(super) fn current_type_method_signature(
+        &self,
+        method: &str,
+        arity: usize,
+    ) -> Option<&CallableSignature> {
+        let current = self.current_type.as_ref()?;
+
+        if let Some(signature) = current
+            .methods
+            .get(method)
             .and_then(|by_arity| by_arity.get(&arity))
+        {
+            return Some(signature);
+        }
+
+        current
+            .parent
+            .as_deref()
+            .and_then(|parent| self.type_method_signature(parent, method, arity))
     }
 
     /// Register a protocol name.
