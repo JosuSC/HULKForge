@@ -16,6 +16,14 @@ fn parse_source(source: &str) -> Option<Program> {
     parser.parse_program()
 }
 
+/// Parse source and also return parser errors for strict validations.
+fn parse_source_with_errors(source: &str) -> (Option<Program>, Vec<String>) {
+    let stream = TokenStream::new(source);
+    let mut parser = Parser::new(stream);
+    let program = parser.parse_program();
+    (program, parser.errors)
+}
+
 // ============================================
 // ASSOCIATIVITY TESTS
 // ============================================
@@ -282,6 +290,54 @@ fn test_let_with_parenthesized_sequence_body() {
     "#;
     let result = parse_source(source);
     assert!(result.is_some(), "Parenthesized let body with semicolons should parse");
+}
+
+#[test]
+fn test_let_with_repeated_let_keywords() {
+    let source = r#"
+        let a = 42, let mod = a % 3, let b = 0 in
+            if (mod == 0) "Magic"
+            elif (mod % 3 == 1) "Woke"
+            else "Dumb"
+    "#;
+    let result = parse_source(source);
+    assert!(result.is_some(), "Repeated let keywords in bindings should parse");
+}
+
+#[test]
+fn test_let_combinations_should_not_report_parse_errors() {
+    let source = r#"
+        {
+            let a = 42, let mod = a % 3, let b: Boolean = true in
+                print(
+                    if (mod == 0 & b) "Magic"
+                    elif (mod % 3 == 1) "Woke"
+                    else "Dumb"
+                );
+
+            let a: Number = 42, mod = a % 3, b = true in
+                print(
+                    if (mod == 0 & b) "Magic"
+                    elif (mod % 3 == 1) "Woke"
+                    else "Dumb"
+                );
+
+            let a = 42 in
+                let mod: Number = a % 3 in
+                    let b = true in
+                        print(
+                            if (mod == 0 & b) "Magic"
+                            elif (mod % 3 == 1) "Woke"
+                            else "Dumb"
+                        );
+
+            let a = (let b = 6 in b * 7) in print(a);
+        };
+    "#;
+
+    let (result, errors) = parse_source_with_errors(source);
+    assert!(result.is_some(), "Complex let combinations should parse");
+    assert!(errors.is_empty(), "Expected no parse errors, got: {:?}", errors);
 }
 
 #[test]

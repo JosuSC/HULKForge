@@ -1209,8 +1209,10 @@ impl<'src> Parser<'src> {
         }
     }
 
-    // Parse a single let binding: IDENT TypeAnnotation? '=' Expr
+    // Parse a single let binding: ["let"] IDENT TypeAnnotation? '=' Expr
     fn parse_let_binding(&mut self) -> Option<LetBinding> {
+        let _ = self.matches(&Token::Let);
+
         let (name, name_span, can_continue) = match self.peek().clone() {
             Token::Ident(n) => {
                 let n = n.clone();
@@ -1262,25 +1264,25 @@ impl<'src> Parser<'src> {
 
     // Parse `let` expression: "let" LetBinding ("," LetBinding)* "in" Expr
     fn parse_let(&mut self) -> Option<Expr> {
-    let start_span = self.current.span;
-    self.advance(); // consume 'let'
+        let start_span = self.current.span;
+        self.advance(); // consume 'let'
 
-    let mut bindings = Vec::new();
-    bindings.push(self.parse_let_binding()?);
-
-    while self.matches(&Token::Comma) {
+        let mut bindings = Vec::new();
         bindings.push(self.parse_let_binding()?);
-    }
 
-    self.expect(&Token::In, "expected 'in' after let bindings")?;
+        while self.matches(&Token::Comma) {
+            bindings.push(self.parse_let_binding()?);
+        }
 
-    let body = match self.parse_expr() {
-        Some(e) => e,
-        None => self.error_expr(),
-    };
+        self.expect(&Token::In, "expected 'in' after let bindings")?;
 
-    let span = Span { start: start_span.start, end: body.span().end };
-    Some(Expr::Let { bindings, body: Box::new(body), span })
+        let body = match self.parse_expr() {
+            Some(e) => e,
+            None => self.error_expr(),
+        };
+
+        let span = Span { start: start_span.start, end: body.span().end };
+        Some(Expr::Let { bindings, body: Box::new(body), span })
     }
 
     // Parse `if` expression with mandatory else: if (cond) then_expr (elif (cond) expr)* else expr

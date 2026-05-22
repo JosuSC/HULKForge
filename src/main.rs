@@ -10,6 +10,36 @@ use struct_printer::test_program; // import test_program directly
 
 fn main() {
 
+    test_program(true, r#"
+        {
+            let a = 42, let mod = a % 3, let b: Boolean = true in
+                print(
+                    if (mod == 0 & b) "Magic"
+                    elif (mod % 3 == 1) "Woke"
+                    else "Dumb"
+                );
+
+            let a: Number = 42, mod = a % 3, b = true in
+                print(
+                    if (mod == 0 & b) "Magic"
+                    elif (mod % 3 == 1) "Woke"
+                    else "Dumb"
+                );
+
+
+            let a = 42 in 
+                let mod: Number = a % 3 in
+                    let b = true in
+                        print(
+                            if (mod == 0 & b) "Magic"
+                            elif (mod % 3 == 1) "Woke"
+                            else "Dumb"
+                        );
+            
+            let a = (let b = 6 in b * 7) in print(a);
+        };
+    "#);
+
     test_program(false, r#"
         type B {
             d = 0;
@@ -36,6 +66,7 @@ fn main() {
                 };
                 let jery = new Person("Jery", 21) in
                     print(jery.get_d());
+                let f = (x) => x * 2 in print(f(10));
             }
         }
     "#);
@@ -407,5 +438,6 @@ fn main() {
             print("Hello World");
         };
     "#);
+
 }
 
