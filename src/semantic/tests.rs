@@ -376,8 +376,29 @@ fn let_binding_reports_inconsistent_function_return_note() {
             };
     "#);
 
-    assert_has_error(&errors,"function 'g' return type expects Boolean, found Number");
+    assert_has_error(
+        &errors,
+        "function 'g' has an inconsistent return type: it declares Boolean, but its body returns Number",
+    );
     assert_has_error(&errors, "let binding 'a' expected a String, but found a value of another type; note: function 'g' has an inconsistent return type: it declares Boolean, but its body returns Number");
+}
+
+#[test]
+fn arithmetic_operator_reports_source_binding_inconsistency_note() {
+    let errors = semantic_errors(r#"
+        function g(a): Number => a + 5;
+
+        let b: String = 4 * 2 in
+            let a: Number = g(5) + b in {
+                print(a);
+            };
+    "#);
+
+    assert_has_error(&errors, "let binding 'b' expects String, found Number");
+    assert_has_error(
+        &errors,
+        "arithmetic operator requires Number (right side: String); note: let binding 'b' expects String, found Number",
+    );
 }
 
 #[test]

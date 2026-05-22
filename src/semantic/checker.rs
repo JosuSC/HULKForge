@@ -54,6 +54,7 @@ pub fn check_program(program: &Program) -> Vec<SemanticError> {
 pub struct SemanticChecker {
     ctx: Context,
     errors: Vec<SemanticError>,
+    variable_type_issues: HashMap<String, String>,
     function_return_issues: HashMap<String, String>,
 }
 
@@ -63,6 +64,7 @@ impl SemanticChecker {
         Self {
             ctx: Context::new(),
             errors: Vec::new(),
+            variable_type_issues: HashMap::new(),
             function_return_issues: HashMap::new(),
         }
     }
@@ -747,18 +749,26 @@ impl SemanticChecker {
                     BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div | BinOp::Mod | BinOp::Pow => {
                         if let Some(lt) = &left_ty {
                             if *lt != SimpleType::Number {
-                                self.report(*span, format!(
+                                let mut message = format!(
                                     "arithmetic operator requires Number (left side: {})",
                                     lt.display_name()
-                                ));
+                                );
+                                if let Some(note) = self.expr_issue_note_for_expr(left) {
+                                    message.push_str(&format!("; note: {}", note));
+                                }
+                                self.report(*span, message);
                             }
                         }
                         if let Some(rt) = &right_ty {
                             if *rt != SimpleType::Number {
-                                self.report(*span, format!(
+                                let mut message = format!(
                                     "arithmetic operator requires Number (right side: {})",
                                     rt.display_name()
-                                ));
+                                );
+                                if let Some(note) = self.expr_issue_note_for_expr(right) {
+                                    message.push_str(&format!("; note: {}", note));
+                                }
+                                self.report(*span, message);
                             }
                         }
                         self.constrain_number_operand(left, right_ty.as_ref());
@@ -926,25 +936,25 @@ impl SemanticChecker {
                         ) {
                             if expected != actual {
                                 if let Some(note) = self.callable_return_issue_for_expr(&binding.init) {
-                                    self.report(
-                                        binding.span,
-                                        format!(
-                                            "let binding '{}' expected a {}, but found a value of another type; note: {}",
-                                            binding.name,
-                                            expected.display_name(),
-                                            note
-                                        ),
+                                    let message = format!(
+                                        "let binding '{}' expected a {}, but found a value of another type; note: {}",
+                                        binding.name,
+                                        expected.display_name(),
+                                        note
                                     );
+                                    self.variable_type_issues
+                                        .insert(binding.name.clone(), message.clone());
+                                    self.report(binding.span, message);
                                 } else {
-                                    self.report(
-                                        binding.span,
-                                        format!(
-                                            "let binding '{}' expects {}, found {}",
-                                            binding.name,
-                                            expected.display_name(),
-                                            actual.display_name()
-                                        ),
+                                    let message = format!(
+                                        "let binding '{}' expects {}, found {}",
+                                        binding.name,
+                                        expected.display_name(),
+                                        actual.display_name()
                                     );
+                                    self.variable_type_issues
+                                        .insert(binding.name.clone(), message.clone());
+                                    self.report(binding.span, message);
                                 }
                             }
                         }
@@ -1156,6 +1166,15 @@ impl SemanticChecker {
     /// Push a semantic error into the collected errors.
     fn report(&mut self, span: Span, message: String) {
         self.errors.push(SemanticError { span, message });
+    }
+
+    /// If an expression originates from a known type inconsistency, describe it.
+    fn expr_issue_note_for_expr(&self, expr: &Expr) -> Option<String> {
+        match expr {
+            Expr::Ident { name, .. } => self.variable_type_issues.get(name).cloned(),
+            Expr::Call { .. } => self.callable_return_issue_for_expr(expr),
+            _ => None,
+        }
     }
 
     /// If an initializer is a direct call to a function with an inconsistent return type, describe it.

@@ -13,7 +13,7 @@ fn main() {
     test_program(true, r#"
         function g(a): Number => a+5;
 
-        let b: String = 4*2 in
+        let b: Number = 4*2 in
             let a: Number = g(5) + b in {
                 print(a);
             };
