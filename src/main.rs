@@ -271,7 +271,7 @@ fn main() {
         print(sum_until(10));
     "#);
 
-    test_program(false, r#"
+    test_program(true, r#"
         function sum_vec(v): Number {
             let total = 0 in {
                 for (i in v) {
@@ -286,7 +286,7 @@ fn main() {
                 total
             };
         }
-        print(sum_vec([1, 2, 3, 4, 5]));
+        print(sum_vec(["te", "f"]));
     "#);
 
     test_program(false, r#"
@@ -361,13 +361,13 @@ fn main() {
             let sum = 0 in {
                 for (i in a) {
                     for (j in i) {
-                        if (j % 2 == 0) { sum := sum + j } else { sum := sum + 0 };
+                        if (j % 2 == 0) { sum := sum + j  } else { sum := sum + 0};
                     };
                 };
-            sum
+                sum
             }
         }
-        nested(5)
+        nested(5);
     "#);
 }
 

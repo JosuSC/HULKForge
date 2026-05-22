@@ -490,3 +490,146 @@ fn function_call_in_and_reports_nonboolean() {
 
         assert_has_error(&errors, "logical operator requires Boolean");
 }
+
+#[test]
+fn vector_comprehension_reports_multiple_semantic_errors() {
+    let errors = semantic_errors(r#"
+        let source: Number = 1 in {
+            let evens = [ x * true | x in source ] in {
+                print(evens);
+                print(missing);
+            };
+        };
+    "#);
+
+    assert_has_error(&errors, "arithmetic operator requires Number (right side: Boolean)");
+    assert_has_error(&errors, "identifier 'missing' not defined");
+}
+
+#[test]
+fn sum_until_reports_multiple_semantic_errors() {
+    let errors = semantic_errors(r#"
+        function sum_until(max: Number): Number {
+            let result = 0, i = "0" in (
+                while (i < max) {
+                    result := result + true;
+                    i := i + 1;
+                };
+                result
+            )
+        }
+        sum_until("10");
+    "#);
+
+    assert_has_error(&errors, "call to 'sum_until' argument 1 expects Number, found String");
+    assert_has_error(&errors, "relational operator requires Number (left side: String)");
+    assert_has_error(&errors, "arithmetic operator requires Number (right side: Boolean)");
+    assert_has_error(&errors, "arithmetic operator requires Number (left side: String)");
+}
+
+#[test]
+fn sum_vec_reports_multiple_semantic_errors() {
+    let errors = semantic_errors(r#"
+        function sum_vec(v): Number {
+            let total = 0 in {
+                for (i in v) {
+                    total := total + i;
+                };
+                total + "x"
+            }
+        }
+        sum_vec(1);
+    "#);
+
+    assert_has_error(&errors, "call to 'sum_vec' argument 1 expects Vector");
+    assert_has_error(&errors, "arithmetic operator requires Number (right side: String)");
+}
+
+
+#[test]
+fn sum_vec_report_semantic_errors_vector() {
+    let errors = semantic_errors(r#"
+        function sum_vec(v): Number {
+            let total = 0 in {
+                for (i in v) {
+                    total := total + i;
+                };
+                total + "x"
+            }
+        }
+        sum_vec(["text", "texto"]);
+    "#);
+
+    assert_has_error(&errors, "call to 'sum_vec' argument 1 expects Vector<Number>, found Vector<String>");
+}
+
+#[test]
+fn factorial_reports_multiple_semantic_errors() {
+    let errors = semantic_errors(r#"
+        function factorial(n: Number, j: String): Number {
+            let result = 1, i = 1 in {
+                while (i <= n) {
+                    i := i + true;
+                };
+                result := result + "x";
+                result
+            }
+        }
+        if (factorial(1, 2) > 2 & 1) {
+            print("Factorial of 1 is 1");
+        } else {
+            print("Error in factorial function");
+        };
+    "#);
+
+    assert_has_error(&errors, "call to 'factorial' argument 2 expects String, found Number");
+    assert_has_error(&errors, "arithmetic operator requires Number (right side: String)");
+    assert_has_error(&errors, "arithmetic operator requires Number (right side: Boolean)");
+    assert_has_error(&errors, "logical operator requires Boolean (right side: Number)");
+}
+
+#[test]
+fn nested_condition_reports_multiple_semantic_errors() {
+    let errors = semantic_errors(r#"
+        let x: Number = 2, y: Number = 4 in (
+            let b: String = "text", h: Boolean = true in
+            if (false & 1) {
+                1
+            } elif (true | x) {
+                2
+            } elif (y > "10") {
+                3
+            } else {
+                4
+            };
+        )
+    "#);
+
+    assert_has_error(&errors, "logical operator requires Boolean (right side: Number)");
+    assert_has_error(&errors, "logical operator requires Boolean (right side: Number)");
+    assert_has_error(&errors, "relational operator requires Number (right side: String)");
+}
+
+#[test]
+fn assignment_and_vector_literal_report_multiple_semantic_errors() {
+    let errors = semantic_errors(r#"
+        {
+            let a = 10, c = 0 in {
+                let b = "20" in {
+                    a := a + b;
+                    1 := 2;
+                    a
+                }
+            };
+
+            let v = [1, 2, (2 + 4), 3, "4"] in {
+                print(v);
+                print(ghost);
+            };
+        }
+    "#);
+
+    assert_has_error(&errors, "arithmetic operator requires Number (right side: String)");
+    assert_has_error(&errors, "vector with elements of different types (expected Number, found String)");
+    assert_has_error(&errors, "identifier 'ghost' not defined");
+}
