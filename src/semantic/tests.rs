@@ -990,3 +990,85 @@ fn type_and_vector_report_multiple_semantic_errors() {
     assert_has_error(&errors, "identifier 'jery' not defined");
 }
 
+#[test]
+fn self_valid_attribute_reference() {
+    let errors = semantic_errors(r#"
+    type Counter(n) {
+        n = n;
+        get() => self.n;
+    }
+    new Counter(0).get()
+    "#);
+
+    assert!(errors.is_empty(), "expected no semantic errors, got: {:?}", errors);
+}
+
+#[test]
+fn self_valid_method_call() {
+    let errors = semantic_errors(r#"
+    type Counter(n) {
+        n = n;
+        inc() => self.n + 1;
+        double() => self.inc() * 2;
+    }
+    new Counter(3).double()
+    "#);
+
+    assert!(errors.is_empty(), "expected no semantic errors, got: {:?}", errors);
+}
+
+#[test]
+fn self_valid_as_argument_of_function() {
+    let errors = semantic_errors(r#"
+    function getId(c) => 42;
+    type Counter(n) {
+        n = n;
+        id() => getId(self);
+    }
+    new Counter(0).id()
+    "#);
+
+    assert!(errors.is_empty(), "expected no semantic errors, got: {:?}", errors);
+}
+
+#[test]
+fn self_shadowed_by_parameter_of_method() {
+    let errors = semantic_errors(r#"
+    type Counter(n) {
+        n = n;
+        add(self) => self + 1;
+    }
+    new Counter(0).add(5)
+    "#);
+
+    assert!(errors.is_empty(), "expected no semantic errors, got: {:?}", errors);
+}
+
+#[test]
+fn self_shadowed_by_let_inside_method() {
+    let errors = semantic_errors(r#"
+    type Counter(n) {
+        n = n;
+        compute() => let self = 42 in self * 2;
+    }
+    new Counter(0).compute()
+    "#);
+
+    assert!(errors.is_empty(), "expected no semantic errors, got: {:?}", errors);
+}
+
+#[test]
+fn base_valid_calls_parent_method() {
+    let errors = semantic_errors(r#"
+    type Animal {
+        name() => "Animal";
+    }
+    type Dog inherits Animal {
+        name() => base() @ " Dog";
+    }
+    new Dog().name()
+    "#);
+
+    assert!(errors.is_empty(), "expected no semantic errors, got: {:?}", errors);
+}
+
