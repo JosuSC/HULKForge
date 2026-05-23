@@ -1591,7 +1591,11 @@ impl<'src> Parser<'src> {
         }
 
         // Optional inheritance clause
-        let inherits = if self.matches(&Token::Inherits) {
+        let inherits = if self.matches(&Token::Extends) {
+            self.error_no_sync("expected 'inherits' after type name");
+            let _ = self.recover_to(&[Token::LParen, Token::LBrace]);
+            None
+        } else if self.matches(&Token::Inherits) {
             let parent = match self.peek().clone() {
                 Token::Ident(p) => {
                     self.advance();
@@ -1762,7 +1766,11 @@ impl<'src> Parser<'src> {
         };
 
         // Optional extends clause
-        let extends = if self.matches(&Token::Extends) {
+        let extends = if self.matches(&Token::Inherits) {
+            self.error_no_sync("expected 'extends' after protocol name");
+            let _ = self.recover_to(&[Token::LBrace]);
+            None
+        } else if self.matches(&Token::Extends) {
             let parent = match self.peek().clone() {
                 Token::Ident(e) => {
                     self.advance();

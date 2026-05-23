@@ -414,6 +414,39 @@ fn protocol_extends_reports_undefined_parent_protocol() {
 }
 
 #[test]
+fn protocol_extends_reports_error_when_parent_is_a_type() {
+    let errors = semantic_errors(r#"
+        type Base {}
+
+        protocol P extends Base {
+            m(x: Number): Number;
+        }
+        0;
+    "#);
+
+    assert_has_error(&errors, "parent type 'Base' cannot be extended by a protocol");
+}
+
+#[test]
+fn type_inherits_reports_error_when_parent_is_a_protocol() {
+    let errors = semantic_errors(r#"
+        protocol Greetable {
+            greet(): String;
+        }
+
+        type Person(name) inherits Greetable {
+            name: String = name;
+
+            greet(): String => "Hello, I am " @ self.name;
+        }
+
+        0;
+    "#);
+
+    assert_has_error(&errors, "type 'Person' cannot inherit from protocol 'Greetable'");
+}
+
+#[test]
 fn protocol_method_signature_reports_undefined_return_type() {
     let errors = semantic_errors(r#"
         protocol Serializable {
@@ -441,6 +474,26 @@ fn protocol_is_implemented_implicitly_by_matching_methods() {
     "#);
 
     assert!(errors.is_empty(), "expected no semantic errors, got: {:?}", errors);
+}
+
+#[test]
+fn protocol_implementation_reports_assignment_to_self_inside_method() {
+    let errors = semantic_errors(r#"
+        protocol Greetable {
+            greet(): String;
+        }
+
+        type Person(name) {
+            name: String = name;
+
+            reset() => self := new Person("Hilko");
+            greet(): String => "Hello, I am " @ self.name;
+        }
+
+        let p: Greetable = new Person("Alice") in print(p.greet());
+    "#);
+
+    assert_has_error(&errors, "cannot assign to 'self'");
 }
 
 #[test]
@@ -1067,6 +1120,79 @@ fn base_valid_calls_parent_method() {
         name() => base() @ " Dog";
     }
     new Dog().name()
+    "#);
+
+    assert!(errors.is_empty(), "expected no semantic errors, got: {:?}", errors);
+}
+
+#[test]
+fn protocols_and_colored_shapes_example() {
+    let errors = semantic_errors(r#"
+        protocol Shape {
+            area() : Number;
+            perimeter() : Number;
+            describe() : String;
+        }
+
+        protocol ColoredShape extends Shape {
+            color() : String;
+        }
+
+        type Rectangle(x, y) {
+            width: Number = x;
+            height: Number = y;
+
+            area(): Number => self.width * self.height;
+            perimeter(): Number => 2 * (self.width + self.height);
+            describe(): String => "Rectángulo de " @ self.width @ " x " @ self.height;
+        }
+
+        type Square(side) {
+            side: Number = side;
+
+            area(): Number => self.side * self.side;
+            perimeter(): Number => 4 * self.side;
+            describe(): String => "Cuadrado de lado " @ self.side;
+        }
+
+        type Rhombus(side, d1, d2) {
+            side: Number = side;
+            d1: Number = d1;
+            d2: Number = d2;
+
+            area(): Number => (self.d1 * self.d2) / 2;
+            perimeter(): Number => 4 * self.side;
+            describe(): String => "Rombo de lado " @ self.side @ " y diagonales " @ self.d1 @ " y " @ self.d2;
+        }
+
+        type ColoredRectangle(width, height, c) {
+            width: Number = width;
+            height: Number = height;
+            c: String = c;
+
+            area(): Number => self.width * self.height;
+            perimeter(): Number => 2 * (self.width + self.height);
+            describe(): String => "Rectángulo de color " @ self.c;
+            color(): String => self.c;
+        }
+
+        {
+            let s1 : Shape = new Rectangle(3, 4) in {
+                print(s1.describe() @ " | área = " @ s1.area() @ " | perímetro = " @ s1.perimeter());
+            };
+
+            let s2 : Shape = new Square(5) in {
+                print(s2.describe() @ " | área = " @ s2.area() @ " | perímetro = " @ s2.perimeter());
+            };
+
+            let s3 : Shape = new Rhombus(4, 6, 8) in {
+                print(s3.describe() @ " | área = " @ s3.area() @ " | perímetro = " @ s3.perimeter());
+            };
+
+            let cs : ColoredShape = new ColoredRectangle(2, 7, "azul") in {
+                print(cs.describe() @ " | color = " @ cs.color());
+            };
+        }
     "#);
 
     assert!(errors.is_empty(), "expected no semantic errors, got: {:?}", errors);

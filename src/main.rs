@@ -10,6 +10,89 @@ use struct_printer::test_program; // import test_program directly
 
 fn main() {
 
+    test_program(true, r#"
+        protocol Greetable {
+            greet() : String;
+        }
+
+        type Person(name) {
+            name: String = name;
+
+            greet(): String => "Hello, I am " @ self.name;
+        }
+
+        let p : Greetable = new Person("Alice") in print(p.greet());
+
+    "#);
+
+    test_program(false, r#"
+        protocol Shape {
+            area() : Number;
+            perimeter() : Number;
+            describe() : String;
+        }
+
+        protocol ColoredShape extends Shape {
+            color() : String;
+        }
+
+        type Rectangle(x, y) {
+            width: Number = x;
+            height: Number = y;
+
+            area(): Number => self.width * self.height;
+            perimeter(): Number => 2 * (self.width + self.height);
+            describe(): String => "Rectángulo de " @ self.width @ " x " @ self.height;
+        }
+
+        type Square(side) {
+            side: Number = side;
+
+            area(): Number => self.side * self.side;
+            perimeter(): Number => 4 * self.side;
+            describe(): String => "Cuadrado de lado " @ self.side;
+        }
+
+        type Rhombus(side, d1, d2) {
+            side: Number = side;
+            d1: Number = d1;
+            d2: Number = d2;
+
+            area(): Number => (self.d1 * self.d2) / 2;
+            perimeter(): Number => 4 * self.side;
+            describe(): String => "Rombo de lado " @ self.side @ " y diagonales " @ self.d1 @ " y " @ self.d2;
+        }
+
+        type ColoredRectangle(width, height, c) {
+            width: Number = width;
+            height: Number = height;
+            c: String = c;
+
+            area(): Number => self.width * self.height;
+            perimeter(): Number => 2 * (self.width + self.height);
+            describe(): String => "Rectángulo de color " @ self.c;
+            color(): String => self.c;
+        }
+
+        {
+            let s1 : Shape = new Rectangle(3, 4) in {
+                print(s1.describe() @ " | área = " @ s1.area() @ " | perímetro = " @ s1.perimeter());
+            };
+
+            let s2 : Shape = new Square(5) in {
+                print(s2.describe() @ " | área = " @ s2.area() @ " | perímetro = " @ s2.perimeter());
+            };
+
+            let s3 : Shape = new Rhombus(4, 6, 8) in {
+                print(s3.describe() @ " | área = " @ s3.area() @ " | perímetro = " @ s3.perimeter());
+            };
+
+            let cs : ColoredShape = new ColoredRectangle(2, 7, "azul") in {
+                print(cs.describe() @ " | color = " @ cs.color());
+            };
+        }
+    "#);
+
     test_program(false, r#"
         protocol MyProtocol  {
             greet() : String;

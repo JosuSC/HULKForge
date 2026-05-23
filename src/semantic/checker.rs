@@ -298,7 +298,7 @@ impl SemanticChecker {
         }
 
         if let Some(inherits) = &decl.inherits {
-            self.check_inherits_clause(inherits);
+            self.check_inherits_clause(&decl.name, inherits);
         }
 
         let mut attrs = HashSet::new();
@@ -399,7 +399,12 @@ impl SemanticChecker {
         }
 
         if let Some(parent) = &decl.extends {
-            if !self.ctx.is_protocol_defined(parent) {
+            if self.ctx.is_constructible_type(parent) {
+                self.report(decl.span, format!(
+                    "parent type '{}' cannot be extended by a protocol",
+                    parent
+                ));
+            } else if !self.ctx.is_protocol_defined(parent) {
                 self.report(decl.span, format!(
                     "parent protocol '{}' not defined",
                     parent
@@ -582,12 +587,18 @@ impl SemanticChecker {
     }
 
     /// Validate an inheritance clause: parent exists and args match.
-    fn check_inherits_clause(&mut self, inherits: &InheritsClause) {
+    fn check_inherits_clause(&mut self, type_name: &str, inherits: &InheritsClause) {
         if is_placeholder(&inherits.parent) {
             return;
         }
 
-        if !self.ctx.is_constructible_type(&inherits.parent) {
+        if self.ctx.is_protocol_defined(&inherits.parent) {
+            self.report(inherits.span, format!(
+                "type '{}' cannot inherit from protocol '{}'",
+                type_name,
+                inherits.parent
+            ));
+        } else if !self.ctx.is_constructible_type(&inherits.parent) {
             self.report(inherits.span, format!(
                 "parent type '{}' not defined",
                 inherits.parent
