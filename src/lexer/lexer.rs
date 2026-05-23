@@ -116,7 +116,6 @@ pub enum Token {
     #[token("as")]       As,
     #[token("true")]     True,
     #[token("false")]    False,
-    #[token("self")]     SelfKw,
     #[token("base")]     Base,
     #[token("protocol")] Protocol,
     #[token("extends")]  Extends,

@@ -28,12 +28,12 @@ fn tokens_with_eof(src: &str) -> Vec<Token> {
 #[test]
 fn keywords() {
     let src = "let in if elif else while for function type new \
-               inherits is as true false self base protocol extends def";
+               inherits is as true false  base protocol extends def";
     assert_eq!(tokens(src), vec![
         Token::Let, Token::In, Token::If, Token::Elif, Token::Else,
         Token::While, Token::For, Token::Function, Token::Type,
         Token::New, Token::Inherits, Token::Is, Token::As,
-        Token::True, Token::False, Token::SelfKw, Token::Base,
+        Token::True, Token::False, Token::Base,
         Token::Protocol, Token::Extends, Token::Def,
     ]);
 }
@@ -723,7 +723,7 @@ fn self_exact() {
     assert_eq!(
         tokens("self.x"),
         vec![
-            Token::SelfKw,
+            Token::Ident("self".into()),
             Token::Dot,
             Token::Ident("x".into()),
         ]

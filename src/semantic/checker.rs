@@ -658,6 +658,12 @@ impl SemanticChecker {
             Expr::Number { .. } => {}
             Expr::StringLit { .. } => {}
             Expr::Bool { .. } => {}
+            Expr::Ident { name, span } if name == "self" => {
+                if !self.ctx.in_method {
+                    self.report(*span, "use of self outside of a method".to_string());
+                }
+            }
+
             Expr::Ident { name, span } => {
                 if is_placeholder(name) {
                     return;
@@ -670,11 +676,9 @@ impl SemanticChecker {
                 {
                     return;
                 }
-                self.report(*span, format!(
-                    "identifier '{}' not defined",
-                    name
-                ));
+                self.report(*span, format!("identifier '{}' not defined", name));
             }
+
             Expr::Call { callee, args, .. } => {
                 for arg in args {
                     self.check_expr(arg);
@@ -710,7 +714,7 @@ impl SemanticChecker {
             }
             Expr::FieldAccess { object, field, span } => {
                 self.check_expr(object);
-                if self.ctx.in_method && is_self_ref(object) {
+                if self.ctx.in_method && matches!(**object, Expr::Ident { ref name, .. } if name == "self") {
                     if let Some(current) = &self.ctx.current_type {
                         if !current.attrs.contains(field) {
                             self.report(*span, format!(
@@ -727,7 +731,7 @@ impl SemanticChecker {
                     self.check_expr(arg);
                 }
 
-                if self.ctx.in_method && is_self_ref(object) {
+                if self.ctx.in_method && matches!(**object, Expr::Ident { ref name, .. } if name == "self") {
                     if let Some(signature) = self.ctx.current_type_method_signature(method, args.len()).cloned() {
                         self.check_callable_args(method, args, &signature.params, "method", *span);
                     } else {
@@ -753,11 +757,8 @@ impl SemanticChecker {
                     }
                 }
             }
-            Expr::SelfRef { span } => {
-                if !self.ctx.in_method {
-                    self.report(*span, "use of self outside of a method".to_string());
-                }
-            }
+            
+
             Expr::Base { args, span } => {
                 if !self.ctx.in_method {
                     self.report(*span, "use of base outside of a method".to_string());
@@ -1113,6 +1114,13 @@ impl SemanticChecker {
                 if is_placeholder(name) {
                     return;
                 }
+
+                // 🚫 NEW: prohibir asignar a `self`
+                if name == "self" {
+                    self.report(*span, "cannot assign to 'self'".to_string());
+                    return;
+                }
+
                 if !self.ctx.is_var_defined(name) {
                     self.report(*span, format!(
                         "assignment to undefined variable '{}'",
@@ -1120,19 +1128,24 @@ impl SemanticChecker {
                     ));
                 }
             }
+
             Expr::FieldAccess { .. } => {
                 self.check_expr(target);
             }
+
             Expr::Index { object, index, .. } => {
                 self.check_expr(object);
                 self.check_expr(index);
             }
+
             Expr::Error { .. } => {}
+
             _ => {
                 self.report(span, "invalid assignment target".to_string());
             }
         }
     }
+
 
     /// Validate a call to an identifier: variables, functions, macros or builtins.
     fn check_call_ident(&mut self, name: &str, args: &[Expr], span: Span) {
@@ -1269,10 +1282,12 @@ impl SemanticChecker {
             Expr::Number { .. } => Some(SimpleType::Number),
             Expr::StringLit { .. } => Some(SimpleType::String),
             Expr::Bool { .. } => Some(SimpleType::Boolean),
+
             Expr::Ident { name, .. } => self
                 .ctx
                 .var_type(name)
                 .or_else(|| builtin_const_simple_type(name)),
+
             Expr::New { type_name, .. } => {
                 if is_placeholder(type_name) {
                     None
@@ -1280,7 +1295,9 @@ impl SemanticChecker {
                     Some(SimpleType::Named(type_name.clone()))
                 }
             }
+
             Expr::AsType { ty, .. } => simple_type_from_type_expr(ty),
+
             Expr::Call { callee, args, .. } => {
                 if let Expr::Ident { name, .. } = &**callee {
                     return self
@@ -1302,8 +1319,10 @@ impl SemanticChecker {
                 }
                 None
             }
+
             Expr::FieldAccess { object, field, .. } => {
-                if is_self_ref(object) {
+                // self.field
+                if matches!(**object, Expr::Ident { ref name, .. } if name == "self") {
                     return self.ctx.current_type_attr_type(field).cloned();
                 }
                 if let Some(SimpleType::Named(type_name)) = self.infer_simple_type(object) {
@@ -1311,28 +1330,32 @@ impl SemanticChecker {
                 }
                 None
             }
-                Expr::If { then_expr, elif_branches, else_expr, .. } => {
-                    let then_ty = self.infer_simple_type(then_expr)?;
-                    for branch in elif_branches {
-                        let branch_ty = self.infer_simple_type(&branch.body)?;
-                        if branch_ty != then_ty {
-                            return None;
-                        }
-                    }
-                    let else_ty = self.infer_simple_type(else_expr)?;
-                    if else_ty == then_ty {
-                        Some(then_ty)
-                    } else {
-                        None
+
+            Expr::If { then_expr, elif_branches, else_expr, .. } => {
+                let then_ty = self.infer_simple_type(then_expr)?;
+                for branch in elif_branches {
+                    let branch_ty = self.infer_simple_type(&branch.body)?;
+                    if branch_ty != then_ty {
+                        return None;
                     }
                 }
-                Expr::While { body, .. } => self.infer_simple_type(body),
-                Expr::For { body, .. } => self.infer_simple_type(body),
-                Expr::Let { body, .. } => self.infer_simple_type(body),
-                Expr::Assign { value, .. } => self.infer_simple_type(value),
-                Expr::Block { exprs, .. } => exprs.last().and_then(|expr| self.infer_simple_type(expr)),
+                let else_ty = self.infer_simple_type(else_expr)?;
+                if else_ty == then_ty {
+                    Some(then_ty)
+                } else {
+                    None
+                }
+            }
+
+            Expr::While { body, .. } => self.infer_simple_type(body),
+            Expr::For { body, .. } => self.infer_simple_type(body),
+            Expr::Let { body, .. } => self.infer_simple_type(body),
+            Expr::Assign { value, .. } => self.infer_simple_type(value),
+            Expr::Block { exprs, .. } => exprs.last().and_then(|expr| self.infer_simple_type(expr)),
+
             Expr::MethodCall { object, method, args, .. } => {
-                if is_self_ref(object) {
+                // self.method(...)
+                if matches!(**object, Expr::Ident { ref name, .. } if name == "self") {
                     return self
                         .ctx
                         .current_type_method_signature(method, args.len())
@@ -1346,6 +1369,7 @@ impl SemanticChecker {
                 }
                 None
             }
+
             Expr::UnaryOp { op, operand, .. } => {
                 let inner = self.infer_simple_type(operand)?;
                 match (op, inner) {
@@ -1354,6 +1378,7 @@ impl SemanticChecker {
                     _ => None,
                 }
             }
+
             Expr::BinaryOp { op, left, right, .. } => {
                 let left_ty = self.infer_simple_type(left)?;
                 let right_ty = self.infer_simple_type(right)?;
@@ -1406,6 +1431,7 @@ impl SemanticChecker {
                     }
                 }
             }
+
             Expr::VectorLit { elements, .. } => {
                 let mut expected: Option<SimpleType> = None;
                 for element in elements {
@@ -1420,9 +1446,11 @@ impl SemanticChecker {
                 }
                 expected.map(|ty| SimpleType::Vector(Box::new(ty)))
             }
+
             _ => None,
         }
     }
+
 
     /// Check that vector literal elements share the same inferred simple type.
     fn check_vector_literal_types(&mut self, elements: &[Expr]) {
@@ -1626,7 +1654,7 @@ impl SemanticChecker {
     }
 
     /// Conservative type inference that preserves local scopes created inside expressions.
-    fn infer_expr_with_scopes(&self, expr: &Expr, ctx: &mut Context) -> Option<SimpleType> {
+   fn infer_expr_with_scopes(&self, expr: &Expr, ctx: &mut Context) -> Option<SimpleType> {
         match expr {
             Expr::Number { .. } => Some(SimpleType::Number),
             Expr::StringLit { .. } => Some(SimpleType::String),
@@ -1653,7 +1681,8 @@ impl SemanticChecker {
                 None
             }
             Expr::FieldAccess { object, field, .. } => {
-                if is_self_ref(object) {
+                // self.field
+                if matches!(**object, Expr::Ident { ref name, .. } if name == "self") {
                     return ctx.current_type_attr_type(field).cloned();
                 }
                 if let Some(SimpleType::Named(type_name)) = self.infer_expr_with_scopes(object, ctx) {
@@ -1662,7 +1691,8 @@ impl SemanticChecker {
                 None
             }
             Expr::MethodCall { object, method, args, .. } => {
-                if is_self_ref(object) {
+                // self.method(...)
+                if matches!(**object, Expr::Ident { ref name, .. } if name == "self") {
                     return ctx
                         .current_type_method_signature(method, args.len())
                         .and_then(|signature| signature.return_type.clone());
@@ -1844,9 +1874,10 @@ impl SemanticChecker {
             }
             Expr::Error { .. } => None,
             Expr::IsType { .. } => Some(SimpleType::Boolean),
-            Expr::SelfRef { .. } | Expr::Base { .. } => self.infer_simple_type(expr),
+            Expr::Base { .. } => self.infer_simple_type(expr),
         }
     }
+
 
     /// Compare an inferred return type against an optional declared return type.
     fn check_return_type(
@@ -1923,10 +1954,10 @@ fn is_placeholder(name: &str) -> bool {
     name.is_empty() || name == "__parse_error__"
 }
 
-/// Is the expression a `self` reference?
 fn is_self_ref(expr: &Expr) -> bool {
-    matches!(expr, Expr::SelfRef { .. })
+    matches!(expr, Expr::Ident { name, .. } if name == "self")
 }
+
 
 /// Extract the span from an expression.
 fn expr_span(expr: &Expr) -> Span {
@@ -1939,7 +1970,7 @@ fn expr_span(expr: &Expr) -> Span {
         Expr::New { span, .. } => *span,
         Expr::FieldAccess { span, .. } => *span,
         Expr::MethodCall { span, .. } => *span,
-        Expr::SelfRef { span } => *span,
+        
         Expr::Base { span, .. } => *span,
         Expr::BinaryOp { span, .. } => *span,
         Expr::UnaryOp { span, .. } => *span,

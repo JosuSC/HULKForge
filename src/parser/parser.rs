@@ -70,7 +70,6 @@ impl<'src> Parser<'src> {
                 | Token::True
                 | Token::False
                 | Token::Ident(_)
-                | Token::SelfKw
                 | Token::Base
                 | Token::New
                 | Token::LParen
@@ -664,14 +663,12 @@ impl<'src> Parser<'src> {
                 Some(Expr::Bool { value: false, span })
             }
 
-            Token::SelfKw => {
-                self.advance();
-                Some(Expr::SelfRef { span })
-            }
+            
 
             Token::Ident(name) => {
                 let name = name.clone();
                 self.advance();
+
 
                 // Check for function call
                 if self.check(&Token::LParen) {
@@ -680,15 +677,17 @@ impl<'src> Parser<'src> {
                         start: span.start,
                         end: rparen_span.end,
                     };
-                    Some(Expr::Call {
+                    return Some(Expr::Call {
                         callee: Box::new(Expr::Ident { name, span }),
                         args,
                         span,
-                    })
-                } else {
-                    Some(Expr::Ident { name, span })
+                    });
                 }
+
+                // Normal identifier
+                Some(Expr::Ident { name, span })
             }
+
 
             Token::Base => {
                 self.advance();
@@ -1376,7 +1375,6 @@ impl<'src> Parser<'src> {
             Expr::New { type_name, args, .. } => Expr::New { type_name, args, span: new_span },
             Expr::FieldAccess { object, field, .. } => Expr::FieldAccess { object, field, span: new_span },
             Expr::MethodCall { object, method, args, .. } => Expr::MethodCall { object, method, args, span: new_span },
-            Expr::SelfRef { .. } => Expr::SelfRef { span: new_span },
             Expr::Base { args, .. } => Expr::Base { args, span: new_span },
             Expr::BinaryOp { op, left, right, .. } => Expr::BinaryOp { op, left, right, span: new_span },
             Expr::UnaryOp { op, operand, .. } => Expr::UnaryOp { op, operand, span: new_span },
@@ -1896,7 +1894,6 @@ impl HasSpan for Expr {
             Expr::New { span, .. } => *span,
             Expr::FieldAccess { span, .. } => *span,
             Expr::MethodCall { span, .. } => *span,
-            Expr::SelfRef { span } => *span,
             Expr::Base { span, .. } => *span,
             Expr::BinaryOp { span, .. } => *span,
             Expr::UnaryOp { span, .. } => *span,

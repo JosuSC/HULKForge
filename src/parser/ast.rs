@@ -204,8 +204,7 @@ pub enum Expr {
         span:   Span,
     },
 
-    /// `self`
-    SelfRef { span: Span },
+    
 
     /// `base(args)` — call to parent implementation
     Base { args: Vec<Expr>, span: Span },

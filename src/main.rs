@@ -474,5 +474,120 @@ fn main() {
         };
     "#);
 
+
+    // ── self válido: referencia a atributo ──
+    test_program(false, r#"
+    type Counter(n) {
+        n = n;
+        get() => self.n;
+    }
+    new Counter(0).get()
+    "#);
+
+    // ── self válido: llamada a método ──
+    test_program(false, r#"
+    type Counter(n) {
+        n = n;
+        inc() => self.n + 1;
+        double() => self.inc() * 2;
+    }
+    new Counter(3).double()
+    "#);
+
+    // ── self válido: como argumento de función ──
+    test_program(false, r#"
+    function getId(c) => 42;
+    type Counter(n) {
+        n = n;
+        id() => getId(self);
+    }
+    new Counter(0).id()
+    "#);
+
+    // ── self oculto por parámetro de método (spec: no es keyword) ──
+    test_program(false, r#"
+    type Counter(n) {
+        n = n;
+        add(self) => self + 1;
+    }
+    new Counter(0).add(5)
+    "#);
+
+    // ── self oculto por let dentro de método ──
+    test_program(false, r#"
+    type Counter(n) {
+        n = n;
+        compute() => let self = 42 in self * 2;
+    }
+    new Counter(0).compute()
+    "#);
+
+    // ── self fuera de método: error semántico ──
+    test_program(false, r#"
+    self.x
+    "#);
+
+    // ── self fuera de método en función global: error semántico ──
+    test_program(false, r#"
+    function bad() => self;
+    bad()
+    "#);
+
+    // ── self como target de := : error semántico ──
+    test_program(false, r#"
+    type A {
+        f() {
+            self := new A();
+        }
+    }
+    new A().f()
+    "#);
+
+    test_program(false,r#"
+    type A {
+            c = 0;
+
+            get_c() => self.c;
+        }
+
+        type Person(name, age) inherits A {
+            name: String = name;
+            age: Number = age;
+        }
+
+        let jery = new Person("Jery", 21) in
+            print(jery.get_c());
+            "#);
+
+    // ── base válido: llamada al método padre ──
+    test_program(false, r#"
+    type Animal {
+        name() => "Animal";
+    }
+    type Dog inherits Animal {
+        name() => base() @ " Dog";
+    }
+    new Dog().name()
+    "#);
+
+    // ── base fuera de método: error semántico ──
+    test_program(false, r#"
+    type A {
+        x = 0;
+    }
+    base()
+    "#);
+
+    // ── base en tipo sin herencia: error semántico ──
+    test_program(false, r#"
+    type A {
+        f() => base();
+    }
+    new A().f()
+    "#);
+
+
 }
+
+
 

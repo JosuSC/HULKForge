@@ -568,11 +568,7 @@ fn print_expr(expr: &Expr, printer: &TreePrinter) {
             let span_printer = printer.child(true);
             print_span(*span, &span_printer);
         }
-        Expr::SelfRef { span } => {
-            printer.line("SelfRef");
-            let span_printer = printer.child(true);
-            print_span(*span, &span_printer);
-        }
+        
         Expr::Base { args, span } => {
             printer.line("Base");
 
