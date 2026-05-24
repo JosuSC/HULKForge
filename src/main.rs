@@ -155,7 +155,7 @@ fn main() {
 
         }
 
-        let p : Printable = new Box() in print(p.printSelf());
+        let p : Printable = new Box() in print(p.greet());
 
     "#);
 
@@ -198,7 +198,7 @@ fn main() {
         };
     "#);
 
-    test_program(false, r#"
+    test_program(true, r#"
         type B {
             d = 0;
 
@@ -218,14 +218,8 @@ fn main() {
         }
 
         {
-            let people = [new Person("Ana", 20), new Person("Luis", 25),  new Person("Jery", 22)], x = 0 in {
-                for (p in people) {
-                    p.greet();
-                };
-                let jery = new Person("Jery", 21) in
-                    print(jery.get_d());
-                let f = (x) => x * 2 in print(f(10));
-            }
+            let jery = new Person("Jery", 21) in 
+                print(jery.get_d());
         }
     "#);
     

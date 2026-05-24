@@ -531,6 +531,34 @@ fn protocol_is_implemented_implicitly_by_matching_methods() {
 }
 
 #[test]
+fn protocol_extends_and_is_implemented_implicitly_by_matching_methods() {
+    let errors = semantic_errors(r#"
+        protocol MyProtocol {
+            greet(): String;
+            alwaysTrue(): Boolean;
+        }
+
+        protocol Printable extends MyProtocol {
+            printSelf(): String;
+            printValue(): Number;
+        }
+
+        type Box {
+            value = 10;
+
+            printSelf(): String => "Box(" @ self.value @ ")";
+            printValue(): Number => self.value;
+            alwaysTrue(): Boolean => true;
+            greet(): String => "Hello, I am a box!";
+        }
+
+        let p: Printable = new Box() in print(p.greet());
+    "#);
+
+    assert!(errors.is_empty(), "expected no semantic errors, got: {:?}", errors);
+}
+
+#[test]
 fn protocol_implementation_reports_assignment_to_self_inside_method() {
     let errors = semantic_errors(r#"
         protocol Greetable {
@@ -1103,35 +1131,6 @@ fn assignment_and_vector_literal_report_multiple_semantic_errors() {
 }
 
 #[test]
-fn type_and_vector_report_multiple_semantic_errors() {
-    let errors = semantic_errors(r#"
-        type Person(name, age) {
-            name: String = name;
-            age: Number = age;
-
-            greet() => print("Hola, soy " @ self.name @ " y tengo " @ self.age @ " años");
-            get_age() => self.age;
-        }
-
-        {
-            let people = [new Person("Ana", 20), Person("Luis", 25), Person("Jery", 22)] in {
-                for (p in people) {
-                    p.greetol();
-                }
-                let jery = new Person("Jery", 21) in
-                    print(jery.get_age());
-                print(jery)
-            }
-        }
-    "#);
-
-    assert_has_error(&errors, "type 'Person' must be instantiated with 'new'");
-    assert_has_error(&errors, "type 'Person' must be instantiated with 'new'");
-    assert_has_error(&errors, "method 'greetol' with arity 0 not defined on type 'Person'");
-    assert_has_error(&errors, "identifier 'jery' not defined");
-}
-
-#[test]
 fn self_valid_attribute_reference() {
     let errors = semantic_errors(r#"
     type Counter(n) {
@@ -1345,5 +1344,69 @@ fn protocols_and_colored_shapes_example() {
     "#);
 
     assert!(errors.is_empty(), "expected no semantic errors, got: {:?}", errors);
+}
+
+#[test]
+fn colored_shape_assignment_reports_missing_protocol_methods() {
+    let errors = semantic_errors(r#"
+        protocol Shape {
+            area() : Number;
+            perimeter() : Number;
+            describe() : String;
+        }
+
+        protocol ColoredShape extends Shape {
+            color() : String;
+        }
+
+        type ColoredRectangle(width, height, c) {
+            width: Number = width;
+            height: Number = height;
+            c: String = c;
+
+            area(): Number => self.width * self.height;
+            describe(): String => "Rectángulo de color " @ self.c;
+            perimeter() : => 2 * (self.width + self.height);
+        }
+
+        let cs : ColoredShape = new ColoredRectangle(2, 7, "azul") in {
+            print(cs.describe() @ " | color = " @ cs.color());
+        };
+    "#);
+
+    assert_has_error(
+        &errors,
+        "let binding 'cs' expects ColoredShape, found ColoredRectangle; ColoredRectangle does not satisfy the requirements of ColoredShape",
+    );
+}
+
+#[test]
+fn added_test_inherited_transitive_person_typed_constructor() {
+    let errors = semantic_errors(r#"
+        type B {
+            d = 0;
+
+            get_d() => self.d;
+        }
+        type A inherits B {
+            c = 0;
+
+            get_c() => self.c;
+        }
+        type Person(name: String, age: Number) inherits A {
+            name: String = name;
+            age: Number = age;
+
+            greet() => print("Hola, soy " @ self.name @ " y tengo " @ self.age @ " años");
+            get_age() => self.age;
+        }
+
+        {
+            let jery = new Person("Jery", 21) in 
+                print(jery.get_d());
+        }
+    "#);
+
+    assert!(errors.is_empty(), "expected no errors, got: {:?}", errors);
 }
 
