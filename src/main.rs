@@ -10,7 +10,22 @@ use struct_printer::test_program; // import test_program directly
 
 fn main() {
 
-    test_program(true, r#"
+    test_program(false, r#"
+        protocol C {
+            greet() : String;
+        }
+
+        protocol A extends C {
+            hey() : String;
+        }
+
+        protocol B extends A {
+            hello() : String;
+        }
+        print(42);
+    "#);
+
+    test_program(false, r#"
 
         type A {
             x = 0;

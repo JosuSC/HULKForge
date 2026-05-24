@@ -97,6 +97,20 @@ fn build_type_decl_map<'a>(program: &'a Program) -> HashMap<String, &'a crate::p
     type_decl_map
 }
 
+fn build_protocol_decl_map<'a>(
+    program: &'a Program,
+) -> HashMap<String, &'a crate::parser::ProtocolDecl> {
+    let mut protocol_decl_map = HashMap::new();
+
+    for decl in &program.decls {
+        if let Decl::Protocol(protocol) = decl {
+            protocol_decl_map.insert(protocol.name.clone(), protocol);
+        }
+    }
+
+    protocol_decl_map
+}
+
 fn type_member_method_names(ty: &crate::parser::TypeDecl) -> Vec<String> {
     ty.members
         .iter()
@@ -104,6 +118,14 @@ fn type_member_method_names(ty: &crate::parser::TypeDecl) -> Vec<String> {
             crate::parser::TypeMember::Method(method) => Some(method.name.clone()),
             _ => None,
         })
+        .collect()
+}
+
+fn protocol_method_names(protocol: &crate::parser::ProtocolDecl) -> Vec<String> {
+    protocol
+        .methods
+        .iter()
+        .map(|method| method.name.clone())
         .collect()
 }
 
@@ -125,6 +147,31 @@ fn collect_inherited_methods<'a>(
     if let Some(parent_ty) = type_decl_map.get(&parent_name) {
         inherited_methods.push((parent_name.clone(), type_member_method_names(parent_ty)));
         collect_inherited_methods(parent_ty, type_decl_map, visited, inherited_methods);
+    }
+}
+
+fn collect_inherited_protocol_methods<'a>(
+    protocol: &'a crate::parser::ProtocolDecl,
+    protocol_decl_map: &HashMap<String, &'a crate::parser::ProtocolDecl>,
+    visited: &mut HashSet<String>,
+    inherited_methods: &mut Vec<(String, Vec<String>)>,
+) {
+    let Some(parent_name) = &protocol.extends else {
+        return;
+    };
+
+    if !visited.insert(parent_name.clone()) {
+        return;
+    }
+
+    if let Some(parent_protocol) = protocol_decl_map.get(parent_name) {
+        inherited_methods.push((parent_name.clone(), protocol_method_names(parent_protocol)));
+        collect_inherited_protocol_methods(
+            parent_protocol,
+            protocol_decl_map,
+            visited,
+            inherited_methods,
+        );
     }
 }
 
@@ -280,7 +327,11 @@ fn print_method_def(m: &crate::parser::MethodDef, printer: &TreePrinter) {
     print_span(m.span, &span_printer);
 }
 
-fn print_protocol_decl(p: &crate::parser::ProtocolDecl, printer: &TreePrinter) {
+fn print_protocol_decl(
+    p: &crate::parser::ProtocolDecl,
+    protocol_decl_map: &HashMap<String, &crate::parser::ProtocolDecl>,
+    printer: &TreePrinter,
+) {
     printer.line("ProtocolDecl");
 
     let name_printer = printer.child(false);
@@ -338,6 +389,36 @@ fn print_protocol_decl(p: &crate::parser::ProtocolDecl, printer: &TreePrinter) {
 
             let span_printer = child.child(true);
             print_span(method.span, &span_printer);
+        }
+    }
+
+    let inherited_methods_printer = printer.child(false);
+    let mut visited = HashSet::new();
+    let mut inherited_methods = Vec::new();
+    collect_inherited_protocol_methods(
+        p,
+        protocol_decl_map,
+        &mut visited,
+        &mut inherited_methods,
+    );
+    if inherited_methods.is_empty() {
+        inherited_methods_printer.line("inherited_methods: []");
+    } else {
+        inherited_methods_printer.line("inherited_methods");
+        for (idx, (ancestor_name, method_names)) in inherited_methods.iter().enumerate() {
+            let ancestor_printer = inherited_methods_printer.child(idx + 1 == inherited_methods.len());
+            ancestor_printer.line(&format!("ancestor: {}", ancestor_name));
+
+            let methods_printer = ancestor_printer.child(true);
+            if method_names.is_empty() {
+                methods_printer.line("methods: []");
+            } else {
+                methods_printer.line("methods");
+                for (method_idx, method_name) in method_names.iter().enumerate() {
+                    let method_printer = methods_printer.child(method_idx + 1 == method_names.len());
+                    method_printer.line(method_name);
+                }
+            }
         }
     }
 
@@ -493,6 +574,7 @@ fn print_func_decl(func: &FuncDecl, printer: &TreePrinter) {
 fn print_decl(
     decl: &Decl,
     type_decl_map: &HashMap<String, &crate::parser::TypeDecl>,
+    protocol_decl_map: &HashMap<String, &crate::parser::ProtocolDecl>,
     printer: &TreePrinter,
 ) {
     match decl {
@@ -509,7 +591,7 @@ fn print_decl(
         Decl::Protocol(protocol) => {
             printer.line("Decl::Protocol");
             let child = printer.child(true);
-            print_protocol_decl(protocol, &child);
+            print_protocol_decl(protocol, protocol_decl_map, &child);
         }
         Decl::Macro(mac) => {
             printer.line("Decl::Macro");
@@ -523,6 +605,7 @@ fn print_program(program: &Program) {
     let printer = TreePrinter::root();
     printer.line("Program");
     let type_decl_map = build_type_decl_map(program);
+    let protocol_decl_map = build_protocol_decl_map(program);
 
     let decls_printer = printer.child(false);
     if program.decls.is_empty() {
@@ -531,7 +614,7 @@ fn print_program(program: &Program) {
         decls_printer.line("decls");
         for (idx, decl) in program.decls.iter().enumerate() {
             let child = decls_printer.child(idx + 1 == program.decls.len());
-            print_decl(decl, &type_decl_map, &child);
+            print_decl(decl, &type_decl_map, &protocol_decl_map, &child);
         }
     }
 
