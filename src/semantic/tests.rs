@@ -1476,3 +1476,257 @@ fn added_test_inherited_transitive_person_typed_constructor() {
     assert!(errors.is_empty(), "expected no errors, got: {:?}", errors);
 }
 
+#[test]
+fn main_protocol_chain_is_valid() {
+    let errors = semantic_errors(r#"
+        protocol C {
+            greet() : String;
+        }
+
+        protocol A extends C {
+            hey() : String;
+        }
+
+        protocol B extends A {
+            hello() : String;
+        }
+        print(42);
+    "#);
+
+    assert!(errors.is_empty(), "expected no errors, got: {:?}", errors);
+}
+
+#[test]
+fn main_person_inherits_a_and_base_call_is_valid() {
+    let errors = semantic_errors(r#"
+        type A {
+            x = 0;
+
+            get_x() => self.x;
+        }
+
+        type Person(firstname, lastname) inherits A {
+            firstname = firstname;
+            lastname = lastname;
+
+            num(a: Number): Number => a+1;
+            hole() => "This is a hole in the Person type";
+            name(a: String, b: Number): String => self.firstname @@ self.lastname;
+        }
+
+        type Knight inherits Person {
+            name(a: String, b: Number): String => "Sir" @@ base();
+        }
+
+        let p : Person = new Knight("Phil", "Collins") in
+            print(p.get_x());
+    "#);
+
+    assert!(errors.is_empty(), "expected no errors, got: {:?}", errors);
+}
+
+#[test]
+fn main_greetable_protocol_assignment_is_valid() {
+    let errors = semantic_errors(r#"
+        protocol Greetable {
+            greet() : String;
+        }
+
+        type Person(name) {
+            name: String = name;
+
+            greet(): String => "Hello, I am " @ self.name;
+        }
+
+        let p : Greetable = new Person("Alice") in print(p.greet());
+    "#);
+
+    assert!(errors.is_empty(), "expected no errors, got: {:?}", errors);
+}
+
+#[test]
+fn main_function_with_let_binding_is_valid() {
+    let errors = semantic_errors(r#"
+        function g(a): Number => a+5;
+
+        let b: Number = 4*2 in
+            let a: Number = g(5) + b in {
+                print(a);
+            };
+    "#);
+
+    assert!(errors.is_empty(), "expected no errors, got: {:?}", errors);
+}
+
+#[test]
+fn main_nested_let_if_elif_block_is_valid() {
+    let errors = semantic_errors(r#"
+        {
+            let a = 42, let mod = a % 3, let b: Boolean = true in
+                print(
+                    if (mod == 0 & b) "Magic"
+                    elif (mod % 3 == 1) "Woke"
+                    else "Dumb"
+                );
+
+            let a: Number = 42, mod = a % 3, b = true in
+                print(
+                    if (mod == 0 & b) "Magic"
+                    elif (mod % 3 == 1) "Woke"
+                    else "Dumb"
+                );
+
+
+            let a = 42 in 
+                let mod: Number = a % 3 in
+                    let b = true in
+                        print(
+                            if (mod == 0 & b) "Magic"
+                            elif (mod % 3 == 1) "Woke"
+                            else "Dumb"
+                        );
+            
+            let a = (let b = 6 in b * 7) in print(a);
+        };
+    "#);
+
+    assert!(errors.is_empty(), "expected no errors, got: {:?}", errors);
+}
+
+#[test]
+fn main_person_age_inheritance_is_valid() {
+    let errors = semantic_errors(r#"
+        type B {
+            d = 0;
+
+            get_d() => self.d;
+        }
+        type A inherits B {
+            c = 0;
+
+            get_c() => self.c;
+        }
+        type Person(name: String, age: Number) inherits A {
+            name: String = name;
+            age: Number = age;
+
+            greet() => print("Hola, soy " @ self.name @ " y tengo " @ self.age @ " años");
+            get_age() => self.age;
+        }
+
+        {
+            let jery = new Person("Jery", 21) in 
+                print(jery.get_d());
+        }
+    "#);
+
+    assert!(errors.is_empty(), "expected no errors, got: {:?}", errors);
+}
+
+#[test]
+fn main_vector_comprehension_is_valid() {
+    let errors = semantic_errors(r#"
+       let evens = [ x * 2 | x in [1, 2, 3, 4, 5] ] in
+       print(evens);
+    "#);
+
+    assert!(errors.is_empty(), "expected no errors, got: {:?}", errors);
+}
+
+#[test]
+fn main_sum_until_is_valid() {
+    let errors = semantic_errors(r#"
+        function sum_until(max : Number): Number {
+            let result = 0, i = 0 in (
+                while (i < max) {
+                    result := result + i;
+                    i := i + 1;
+                };
+                result
+            )
+        }
+        print(sum_until(10));
+    "#);
+
+    assert!(errors.is_empty(), "expected no errors, got: {:?}", errors);
+}
+
+#[test]
+fn main_sum_vec_is_valid() {
+    let errors = semantic_errors(r#"
+        function sum_vec(v): Number {
+            let total = 0 in {
+                for (i in v) {
+                    if (i < 0) {
+                        total := total + (0 - i);
+                    } elif (i == 0) {
+                        total := total + 0;
+                    } else {
+                        total := total + i;
+                    };
+                };
+                total
+            };
+        }
+        print(sum_vec([1,2,3,4,5]));
+    "#);
+
+    assert!(errors.is_empty(), "expected no errors, got: {:?}", errors);
+}
+
+#[test]
+fn main_factorial_reports_undefined_results() {
+    let errors = semantic_errors(r#"
+        function factorial(n: Number, j: String): Number {
+            let result = 1, i = 1 in {
+                while (i <= n) {
+                    result := result * i;
+                    i := i + 1;
+                };
+                results
+            }
+        }
+        if (factorial (1, "testing_param") > 2 & true) {
+            print("Factorial of 1 is 1");
+        } else {
+            print("Error in factorial function");
+        };
+    "#);
+
+    assert_has_error(&errors, "identifier 'results' not defined");
+}
+
+#[test]
+fn main_assignment_and_indexing_is_valid() {
+    let errors = semantic_errors(r#"
+        {
+            let a = 10, c = 0 in {
+                let b = 20 in {
+                    a := a + b + c;
+                    a
+                }
+            };
+
+            let v = [1, 2, (2+4), 3, 4] in 
+            v[2];
+        }
+    "#);
+
+    assert!(errors.is_empty(), "expected no errors, got: {:?}", errors);
+}
+
+#[test]
+fn main_function_chain_is_valid() {
+    let errors = semantic_errors(r#"
+        function f(a, b): Number { if (a > b) { a } else { b } }
+        
+        function g(): Number {
+            let r = f(10, 20) in
+            r
+        }
+        g();
+    "#);
+
+    assert!(errors.is_empty(), "expected no errors, got: {:?}", errors);
+}
+

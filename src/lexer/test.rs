@@ -28,13 +28,13 @@ fn tokens_with_eof(src: &str) -> Vec<Token> {
 #[test]
 fn keywords() {
     let src = "let in if elif else while for function type new \
-               inherits is as true false  base protocol extends def";
+               inherits is as true false  base protocol extends";
     assert_eq!(tokens(src), vec![
         Token::Let, Token::In, Token::If, Token::Elif, Token::Else,
         Token::While, Token::For, Token::Function, Token::Type,
         Token::New, Token::Inherits, Token::Is, Token::As,
         Token::True, Token::False, Token::Base,
-        Token::Protocol, Token::Extends, Token::Def,
+        Token::Protocol, Token::Extends,
     ]);
 }
 
@@ -328,12 +328,6 @@ fn vector_implicit() {
     assert_eq!(toks[0], Token::LBracket);
     assert!(toks.contains(&Token::Pipe));
     assert!(toks.contains(&Token::In));
-}
-
-#[test]
-fn functor_type() {
-    let toks = tokens("(Number) -> Boolean");
-    assert!(toks.contains(&Token::ThinArrow));
 }
 
 #[test]
@@ -1652,86 +1646,6 @@ fn percent_in_expression() {
 }
 
 #[test]
-fn dollar_placeholder() {
-    // $iter es un variable placeholder en macros (sección A.14.4)
-    assert_eq!(
-        tokens("$iter"),
-        vec![
-            Token::Dollar,
-            Token::Ident("iter".into()),
-        ]
-    );
-}
-
-#[test]
-fn dollar_in_macro_def() {
-    // def repeat($iter: Number, n: Number, *expr: Object)
-    assert_eq!(
-        tokens("def repeat($iter: Number, n: Number)"),
-        vec![
-            Token::Def,
-            Token::Ident("repeat".into()),
-            Token::LParen,
-            Token::Dollar,
-            Token::Ident("iter".into()),
-            Token::Colon,
-            Token::Ident("Number".into()),
-            Token::Comma,
-            Token::Ident("n".into()),
-            Token::Colon,
-            Token::Ident("Number".into()),
-            Token::RParen,
-        ]
-    );
-}
-
-#[test]
-fn def_keyword() {
-    assert_eq!(
-        tokens("def repeat(n: Number)"),
-        vec![
-            Token::Def,
-            Token::Ident("repeat".into()),
-            Token::LParen,
-            Token::Ident("n".into()),
-            Token::Colon,
-            Token::Ident("Number".into()),
-            Token::RParen,
-        ]
-    );
-}
-
-#[test]
-fn def_with_star_arg() {
-    // *expr es argumento de bloque en macros (sección A.14.1)
-    assert_eq!(
-        tokens("def repeat(n: Number, *expr: Object)"),
-        vec![
-            Token::Def,
-            Token::Ident("repeat".into()),
-            Token::LParen,
-            Token::Ident("n".into()),
-            Token::Colon,
-            Token::Ident("Number".into()),
-            Token::Comma,
-            Token::Star,
-            Token::Ident("expr".into()),
-            Token::Colon,
-            Token::Ident("Object".into()),
-            Token::RParen,
-        ]
-    );
-}
-
-#[test]
-fn def_is_not_ident() {
-    // "def" no debe tokenizarse como Ident
-    let toks = tokens("def");
-    assert_eq!(toks, vec![Token::Def]);
-    assert_ne!(toks, vec![Token::Ident("def".into())]);
-}
-
-#[test]
 fn thin_arrow_exact() {
     assert_eq!(
         tokens("(Number) -> Boolean"),
@@ -1750,27 +1664,6 @@ fn thin_arrow_vs_minus_gt() {
     // -> es ThinArrow, no Minus + Gt
     assert_eq!(tokens("->"),  vec![Token::ThinArrow]);
     assert_eq!(tokens("- >"), vec![Token::Minus, Token::Gt]);
-}
-
-#[test]
-fn thin_arrow_in_functor_annotation() {
-    // función que recibe un functor (Number) -> Boolean
-    assert_eq!(
-        tokens("function f(filter: (Number) -> Boolean)"),
-        vec![
-            Token::Function,
-            Token::Ident("f".into()),
-            Token::LParen,
-            Token::Ident("filter".into()),
-            Token::Colon,
-            Token::LParen,
-            Token::Ident("Number".into()),
-            Token::RParen,
-            Token::ThinArrow,
-            Token::Ident("Boolean".into()),
-            Token::RParen,
-        ]
-    );
 }
 
 #[test]

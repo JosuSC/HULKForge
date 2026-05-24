@@ -9,14 +9,13 @@ pub(super) struct CallableSignature {
     pub(super) return_type: Option<SimpleType>,
 }
 
-/// Context holds scoped variables, type/function/macro registries and builtins.
+/// Context holds scoped variables, type/function registries and builtins.
 #[derive(Clone)]
 pub struct Context {
     var_scopes: Vec<HashSet<String>>,
     var_types: Vec<HashMap<String, SimpleType>>,
     functions: HashMap<String, HashSet<usize>>,
     function_signatures: HashMap<String, CallableSignature>,
-    macros: HashMap<String, HashSet<usize>>,
     types: HashMap<String, TypeInfo>,
     protocols: HashMap<String, ProtocolInfo>,
     builtin_functions: HashMap<String, HashSet<usize>>,
@@ -62,7 +61,6 @@ impl Context {
             var_types: vec![HashMap::new()],
             functions: HashMap::new(),
             function_signatures: HashMap::new(),
-            macros: HashMap::new(),
             types: HashMap::new(),
             protocols: HashMap::new(),
             builtin_functions: builtin_functions(),
@@ -144,11 +142,6 @@ impl Context {
             name.to_string(),
             CallableSignature { params, return_type },
         );
-    }
-
-    /// Register a macro name with its arity.
-    pub(super) fn insert_macro(&mut self, name: &str, arity: usize) -> bool {
-        insert_arity(&mut self.macros, name, arity)
     }
 
     /// Register a user-defined type with the number of type parameters.
@@ -349,11 +342,6 @@ impl Context {
         has_arity(&self.functions, name, arity)
     }
 
-    /// Check whether a macro with a given arity exists.
-    pub(super) fn has_macro(&self, name: &str, arity: usize) -> bool {
-        has_arity(&self.macros, name, arity)
-    }
-
     /// Check whether a builtin function with a given arity exists.
     pub(super) fn has_builtin_function(&self, name: &str, arity: usize) -> bool {
         has_arity(&self.builtin_functions, name, arity)
@@ -378,11 +366,6 @@ impl Context {
     /// Check whether any function with the name exists (any arity).
     pub(super) fn has_function_name(&self, name: &str) -> bool {
         self.functions.contains_key(name)
-    }
-
-    /// Check whether any macro with the name exists (any arity).
-    pub(super) fn has_macro_name(&self, name: &str) -> bool {
-        self.macros.contains_key(name)
     }
 
     /// Is the given name a builtin function?

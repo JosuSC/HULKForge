@@ -119,7 +119,6 @@ pub enum Token {
     #[token("base")]     Base,
     #[token("protocol")] Protocol,
     #[token("extends")]  Extends,
-    #[token("def")]      Def,       // Macros (section A.14).
 
     // ---------------------------------------------
     // LITERALS
@@ -166,7 +165,7 @@ pub enum Token {
     #[token("!=")] BangEq,        // Inequality.
     #[token("<=")] LtEq,          // Less than or equal.
     #[token(">=")] GtEq,          // Greater than or equal.
-    #[token("->")] ThinArrow,     // Functor type: (Number) -> Boolean.
+    #[token("->")] ThinArrow,     // Return type arrow in lambda headers.
 
     // ---------------------------------------------
     // SINGLE-CHARACTER OPERATORS
@@ -200,7 +199,6 @@ pub enum Token {
     #[token(",")] Comma,
     #[token(".")] Dot,
     #[token(":")] Colon,       // Type annotation: x: Number.
-    #[token("$")] Dollar,      // Macro placeholder: $iter.
 
     // ---------------------------------------------
     // EOF SENTINEL

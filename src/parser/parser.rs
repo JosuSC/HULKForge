@@ -1122,7 +1122,7 @@ impl<'src> Parser<'src> {
     // Phase 2 helpers & forms
     // -------------------------
 
-    // Parse a simple TypeExpr for Phase 2/3 (Named, Iterable, Vector, Functor)
+    // Parse a simple TypeExpr for Phase 2/3 (Named, Iterable, Vector)
     // Returns (TypeExpr, Span) where Span is the span of the last consumed token.
     fn parse_type_expr(&mut self) -> Option<(TypeExpr, Span)> {
         self.parse_type_expr_internal(true)
@@ -1135,23 +1135,6 @@ impl<'src> Parser<'src> {
 
     // Parse a TypeExpr, optionally synchronizing on error.
     fn parse_type_expr_internal(&mut self, sync: bool) -> Option<(TypeExpr, Span)> {
-        // Functor type: (A, B) -> C
-        if self.check(&Token::LParen) {
-            self.expect_with_sync(&Token::LParen, "expected '(' starting functor type", sync)?;
-            let mut params = Vec::new();
-            // At least one type required inside functor params
-            let (t, _) = self.parse_type_expr_internal(sync)?;
-            params.push(t);
-            while self.matches(&Token::Comma) {
-                let (t, _) = self.parse_type_expr_internal(sync)?;
-                params.push(t);
-            }
-            self.expect_with_sync(&Token::RParen, "expected ')' after functor param list", sync)?;
-            self.expect_with_sync(&Token::ThinArrow, "expected '->' after functor param list", sync)?;
-            let (returns, end_span) = self.parse_type_expr_internal(sync)?;
-            return Some((TypeExpr::Functor { params, returns: Box::new(returns) }, end_span));
-        }
-
         // Named types and postfix operators
         match self.peek().clone() {
             Token::Ident(name) => {
@@ -1176,6 +1159,26 @@ impl<'src> Parser<'src> {
 
                 // Simple named type
                 Some((TypeExpr::Named(name), name_span))
+            }
+            Token::LParen => {
+                self.error_no_sync("expected type expression");
+                let mut recovery = vec![
+                    Token::Comma,
+                    Token::RParen,
+                    Token::ThinArrow,
+                    Token::RBracket,
+                    Token::Colon,
+                    Token::Eq,
+                    Token::Semicolon,
+                    Token::RBrace,
+                ];
+                if sync {
+                    recovery.push(Token::Function);
+                    recovery.push(Token::Type);
+                    recovery.push(Token::Protocol);
+                }
+                let _ = self.recover_to(&recovery);
+                Some((TypeExpr::Named("__parse_error__".to_string()), self.current.span))
             }
             _ => {
                 self.error_no_sync("expected type expression");

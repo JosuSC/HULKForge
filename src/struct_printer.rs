@@ -59,25 +59,6 @@ fn print_type_expr(ty: &TypeExpr, printer: &TreePrinter) {
             let child = printer.child(true);
             print_type_expr(inner, &child);
         }
-        TypeExpr::Functor { params, returns } => {
-            printer.line("Type::Functor");
-
-            let params_printer = printer.child(false);
-            if params.is_empty() {
-                params_printer.line("params: []");
-            } else {
-                params_printer.line("params");
-                for (idx, param) in params.iter().enumerate() {
-                    let child = params_printer.child(idx + 1 == params.len());
-                    print_type_expr(param, &child);
-                }
-            }
-
-            let returns_printer = printer.child(true);
-            returns_printer.line("returns");
-            let child = returns_printer.child(true);
-            print_type_expr(returns, &child);
-        }
     }
 }
 
@@ -426,80 +407,6 @@ fn print_protocol_decl(
     print_span(p.span, &span_printer);
 }
 
-fn print_macro_decl(m: &crate::parser::MacroDecl, printer: &TreePrinter) {
-    printer.line("MacroDecl");
-
-    let name_printer = printer.child(false);
-    name_printer.line(&format!("name: {}", m.name));
-
-    let params_printer = printer.child(false);
-    if m.params.is_empty() {
-        params_printer.line("params: []");
-    } else {
-        params_printer.line("params");
-        for (idx, mp) in m.params.iter().enumerate() {
-            let child = params_printer.child(idx + 1 == m.params.len());
-            match mp {
-                crate::parser::MacroParam::Regular(param) => {
-                    child.line("Regular");
-                    let inner = child.child(true);
-                    print_param(param, &inner);
-                }
-                crate::parser::MacroParam::Block { name, ty, span } => {
-                    child.line("Block");
-
-                    let name_printer = child.child(false);
-                    name_printer.line(&format!("name: {}", name));
-
-                    let ty_printer = child.child(false);
-                    ty_printer.line("ty");
-                    let ty_child = ty_printer.child(true);
-                    print_type_expr(ty, &ty_child);
-
-                    let span_printer = child.child(true);
-                    print_span(*span, &span_printer);
-                }
-                crate::parser::MacroParam::Symbolic { name, ty, span } => {
-                    child.line("Symbolic");
-
-                    let name_printer = child.child(false);
-                    name_printer.line(&format!("name: {}", name));
-
-                    let ty_printer = child.child(false);
-                    ty_printer.line("ty");
-                    let ty_child = ty_printer.child(true);
-                    print_type_expr(ty, &ty_child);
-
-                    let span_printer = child.child(true);
-                    print_span(*span, &span_printer);
-                }
-                crate::parser::MacroParam::Placeholder { name, ty, span } => {
-                    child.line("Placeholder");
-
-                    let name_printer = child.child(false);
-                    name_printer.line(&format!("name: {}", name));
-
-                    let ty_printer = child.child(false);
-                    ty_printer.line("ty");
-                    let ty_child = ty_printer.child(true);
-                    print_type_expr(ty, &ty_child);
-
-                    let span_printer = child.child(true);
-                    print_span(*span, &span_printer);
-                }
-            }
-        }
-    }
-
-    let body_printer = printer.child(false);
-    body_printer.line("body");
-    let body_child = body_printer.child(true);
-    print_func_body(&m.body, &body_child);
-
-    let span_printer = printer.child(true);
-    print_span(m.span, &span_printer);
-}
-
 fn print_param(param: &Param, printer: &TreePrinter) {
     printer.line("Param");
 
@@ -592,11 +499,6 @@ fn print_decl(
             printer.line("Decl::Protocol");
             let child = printer.child(true);
             print_protocol_decl(protocol, protocol_decl_map, &child);
-        }
-        Decl::Macro(mac) => {
-            printer.line("Decl::Macro");
-            let child = printer.child(true);
-            print_macro_decl(mac, &child);
         }
     }
 }

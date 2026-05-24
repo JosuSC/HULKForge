@@ -31,7 +31,6 @@ pub enum Decl {
     Function(FuncDecl),
     Type(TypeDecl),
     Protocol(ProtocolDecl),
-    Macro(MacroDecl),
 }
 
 // ── Function ─────────────────────────────────
@@ -124,28 +123,6 @@ pub struct SigParam {
     pub name: String,
     pub ty:   Option<TypeExpr>,
     pub span: Span,
-}
-
-// ── Macro ─────────────────────────────────────
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct MacroDecl {
-    pub name:   String,
-    pub params: Vec<MacroParam>,
-    pub body:   FuncBody,
-    pub span:   Span,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum MacroParam {
-    /// Regular parameter: name, optional type
-    Regular(Param),
-    /// Block argument: *expr
-    Block { name: String, ty: TypeExpr, span: Span },
-    /// Symbolic argument: @symbol
-    Symbolic { name: String, ty: TypeExpr, span: Span },
-    /// Variable placeholder: $iter
-    Placeholder { name: String, ty: TypeExpr, span: Span },
 }
 
 // ══════════════════════════════════════════════
@@ -380,9 +357,4 @@ pub enum TypeExpr {
     Iterable(Box<TypeExpr>),
     /// Vector of T: Number[]
     Vector(Box<TypeExpr>),
-    /// Functor: (A, B) -> C
-    Functor {
-        params:  Vec<TypeExpr>,
-        returns: Box<TypeExpr>,
-    },
 }

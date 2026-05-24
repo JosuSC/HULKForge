@@ -86,7 +86,6 @@ impl SemanticChecker {
             Decl::Function(d) => self.predeclare_func_decl(d),
             Decl::Type(d) => self.predeclare_type_decl(d),
             Decl::Protocol(d) => self.predeclare_protocol_decl(d),
-            Decl::Macro(d) => self.predeclare_macro_decl(d),
         }
     }
 
@@ -96,7 +95,6 @@ impl SemanticChecker {
             Decl::Function(d) => self.check_func_decl(d),
             Decl::Type(d) => self.check_type_decl(d),
             Decl::Protocol(d) => self.check_protocol_decl(d),
-            Decl::Macro(d) => self.check_macro_decl(d),
         }
     }
 
@@ -181,30 +179,6 @@ impl SemanticChecker {
         }
 
         self.ctx.insert_protocol(&decl.name, decl.extends.clone());
-    }
-
-    /// Predeclare a macro name and arity; report conflicts.
-    fn predeclare_macro_decl(&mut self, decl: &MacroDecl) {
-        if is_placeholder(&decl.name) {
-            return;
-        }
-
-        if self.ctx.is_builtin_function(&decl.name) {
-            self.report(decl.span, format!(
-                "macro '{}' conflicts with builtin function",
-                decl.name
-            ));
-            return;
-        }
-
-        if self.ctx.has_macro_name(&decl.name) {
-            self.report(decl.span, format!(
-                "macro '{}' already defined",
-                decl.name
-            ));
-        }
-
-        self.ctx.insert_macro(&decl.name, decl.params.len());
     }
 
     /// Check a function declaration: parameters, return type, and body.
@@ -451,27 +425,6 @@ impl SemanticChecker {
         }
 
         self.ctx.set_protocol_members(&decl.name, decl.extends.clone(), methods);
-    }
-
-    /// Check a macro declaration and its parameters/body.
-    fn check_macro_decl(&mut self, decl: &MacroDecl) {
-        if is_placeholder(&decl.name) {
-            return;
-        }
-
-        let mut seen = HashSet::new();
-        for param in &decl.params {
-            self.check_macro_param(param, &mut seen);
-        }
-
-        self.ctx.push_scope();
-        for param in &decl.params {
-            if let Some(name) = macro_param_name(param) {
-                self.define_var(&name, macro_param_span(param));
-            }
-        }
-        self.check_func_body(&decl.body);
-        self.ctx.pop_scope();
     }
 
     /// Check a method signature for duplicate parameters and valid types.
@@ -736,27 +689,6 @@ impl SemanticChecker {
         }
     }
 
-    /// Validate macro parameter variants and uniqueness.
-    fn check_macro_param(&mut self, param: &MacroParam, seen: &mut HashSet<String>) {
-        match param {
-            MacroParam::Regular(p) => self.check_param(p, seen),
-            MacroParam::Block { name, ty, span }
-            | MacroParam::Symbolic { name, ty, span }
-            | MacroParam::Placeholder { name, ty, span } => {
-                if is_placeholder(name) {
-                    return;
-                }
-                if !seen.insert(name.clone()) {
-                    self.report(*span, format!(
-                        "duplicate parameter '{}'",
-                        name
-                    ));
-                }
-                self.check_type_expr(ty, *span);
-            }
-        }
-    }
-
     /// Check the body of a function (inline or block).
     fn check_func_body(&mut self, body: &FuncBody) {
         match body {
@@ -784,7 +716,6 @@ impl SemanticChecker {
                 if self.ctx.is_var_defined(name)
                     || self.ctx.is_builtin_const(name)
                     || self.ctx.has_function_name(name)
-                    || self.ctx.has_macro_name(name)
                     || self.ctx.is_builtin_function(name)
                 {
                     return;
@@ -1309,9 +1240,6 @@ impl SemanticChecker {
             }
             return;
         }
-        if self.ctx.has_macro(name, args.len()) {
-            return;
-        }
         if self.ctx.has_builtin_function(name, args.len()) {
             if let Some(signature) = self
                 .ctx
@@ -1323,7 +1251,6 @@ impl SemanticChecker {
             return;
         }
         if self.ctx.has_function_name(name)
-            || self.ctx.has_macro_name(name)
             || self.ctx.is_builtin_function(name)
         {
             self.report(span, format!(
@@ -1360,12 +1287,6 @@ impl SemanticChecker {
             }
             TypeExpr::Iterable(inner) => self.check_type_expr(inner, span),
             TypeExpr::Vector(inner) => self.check_type_expr(inner, span),
-            TypeExpr::Functor { params, returns } => {
-                for p in params {
-                    self.check_type_expr(p, span);
-                }
-                self.check_type_expr(returns, span);
-            }
         }
     }
 
@@ -2063,7 +1984,6 @@ fn simple_type_from_type_expr(ty: &TypeExpr) -> Option<SimpleType> {
         TypeExpr::Iterable(inner) | TypeExpr::Vector(inner) => {
             simple_type_from_type_expr(inner).map(|inner_ty| SimpleType::Vector(Box::new(inner_ty)))
         }
-        TypeExpr::Functor { .. } => None,
     }
 }
 
@@ -2121,25 +2041,5 @@ fn expr_span(expr: &Expr) -> Span {
         Expr::Index { span, .. } => *span,
         Expr::Lambda { span, .. } => *span,
         Expr::Error { span } => *span,
-    }
-}
-
-/// Extract the parameter name from a MacroParam if present.
-fn macro_param_name(param: &MacroParam) -> Option<String> {
-    match param {
-        MacroParam::Regular(p) => Some(p.name.clone()),
-        MacroParam::Block { name, .. }
-        | MacroParam::Symbolic { name, .. }
-        | MacroParam::Placeholder { name, .. } => Some(name.clone()),
-    }
-}
-
-/// Extract the span from a MacroParam.
-fn macro_param_span(param: &MacroParam) -> Span {
-    match param {
-        MacroParam::Regular(p) => p.span,
-        MacroParam::Block { span, .. }
-        | MacroParam::Symbolic { span, .. }
-        | MacroParam::Placeholder { span, .. } => *span,
     }
 }
