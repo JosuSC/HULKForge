@@ -890,6 +890,13 @@ impl SemanticChecker {
                                     "base",
                                     *span,
                                 );
+                            } else if self.ctx.type_has_method_name(parent, &method_name) {
+                                self.report(*span, format!(
+                                    "base method '{}' with arity {} not defined on parent type '{}' because overridden methods must keep the same signature",
+                                    method_name,
+                                    method_arity,
+                                    parent
+                                ));
                             } else {
                                 self.report(*span, format!(
                                     "base method '{}' with arity {} not defined on parent type '{}'",

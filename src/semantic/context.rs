@@ -215,6 +215,30 @@ impl Context {
         None
     }
 
+    /// Check whether a method with the given name exists on a type or one of its ancestors.
+    pub(super) fn type_has_method_name(&self, type_name: &str, method: &str) -> bool {
+        let mut current = Some(type_name);
+        let mut seen = HashSet::new();
+
+        while let Some(name) = current {
+            if !seen.insert(name.to_string()) {
+                break;
+            }
+
+            let Some(type_info) = self.types.get(name) else {
+                return false;
+            };
+
+            if type_info.methods.contains_key(method) {
+                return true;
+            }
+
+            current = type_info.parent.as_deref();
+        }
+
+        false
+    }
+
     /// Get the signature of a method for the current type, following inheritance.
     pub(super) fn current_type_method_signature(
         &self,

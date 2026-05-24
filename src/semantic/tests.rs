@@ -402,6 +402,19 @@ fn let_binding_reports_type_mismatch_for_initializer() {
 }
 
 #[test]
+fn let_binding_accepts_subtype_initializer() {
+    let errors = semantic_errors(r#"
+        type A {}
+        type B inherits A{}
+        type C inherits B {}
+
+        let x: A = new C() in x;
+    "#);
+
+    assert!(errors.is_empty(), "expected no semantic errors, got: {:?}", errors);
+}
+
+#[test]
 fn let_binding_reports_inconsistent_function_return_note() {
     let errors = semantic_errors(r#"
         function g(a): Boolean => a + 5;
@@ -782,6 +795,36 @@ fn inherited_method_override_with_different_signature_reports_error() {
     "#);
 
     assert_has_error(&errors, "must match inherited signature");
+}
+
+#[test]
+fn inherited_type_reports_three_override_signature_mismatches() {
+    let errors = semantic_errors(r#"
+        type Parent {
+            m1(x: Number): Number => x;
+            m2(text: String): String => text;
+            m3(flag: Boolean): Boolean => flag;
+        }
+
+        type Child inherits Parent {
+            m1(x: String): Number => 0;
+            m2(text: String): Number => 0;
+            m3(flag: Number): Boolean => true;
+        }
+
+        0;
+    "#);
+
+    let mismatch_count = errors
+        .iter()
+        .filter(|error| error.message.contains("must match inherited signature"))
+        .count();
+
+    assert_eq!(
+        mismatch_count, 3,
+        "expected 3 inherited-signature mismatch errors, got: {:?}",
+        errors
+    );
 }
 
 #[test]
@@ -1271,6 +1314,29 @@ fn base_valid_in_overridden_method_with_diff_parameters() {
 
     assert_has_error(&errors, "method 'name' in type 'Knight' must match inherited signature from 'Person'");
     assert_has_error(&errors, "method 'name' argument 2 expects Boolean, found Number");
+}
+
+#[test]
+fn base_reports_signature_mismatch_on_overridden_method() {
+    let errors = semantic_errors(r#"
+    type Person(firstname, lastname) {
+        firstname = firstname;
+        lastname = lastname;
+
+        name(a: String, b: Number): String => self.firstname @@ self.lastname;
+    }
+
+    type Knight inherits Person {
+        name(b: Boolean): String => "Sir" @@ base();
+    }
+
+    let p = new Knight("Phil", "Collins") in p.name(true);
+    "#);
+
+    assert_has_error(
+        &errors,
+        "base method 'name' with arity 1 not defined on parent type 'Person' because overridden methods must keep the same signature",
+    );
 }
 
 #[test]

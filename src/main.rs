@@ -25,7 +25,7 @@ fn main() {
         print(42);
     "#);
 
-    test_program(true, r#"
+    test_program(false, r#"
 
         type A {
             x = 0;
@@ -46,7 +46,7 @@ fn main() {
             name(a: String, b: Number): String => "Sir" @@ base();
         }
 
-        let p = new Knight("Phil", "Collins") in
+        let p : Person = new Knight("Phil", "Collins") in
             print(p.get_x()); 
     "#);
 
@@ -198,7 +198,7 @@ fn main() {
         };
     "#);
 
-    test_program(true, r#"
+    test_program(false, r#"
         type B {
             d = 0;
 
