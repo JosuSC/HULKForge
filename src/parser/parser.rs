@@ -242,15 +242,15 @@ impl<'src> Parser<'src> {
     ///
     /// **Grammar:** LVALUE ":=" parse_assign | OrExpr
     ///
-    /// LVALUE can be: Ident, FieldAccess (x.field), or Index (x[i])
+    /// LVALUE can be: Ident, FieldAccess (x.field)
     /// Parse OrExpr first, then check if result is a valid lvalue and next token is ":=".
     fn parse_assign(&mut self) -> Option<Expr> {
         let left = self.parse_or()?;
 
         if self.matches(&Token::ColonAssign) {
-            // Check if left is a valid assignment target (Ident, FieldAccess, or Index)
+            // Check if left is a valid assignment target (Ident, FieldAccess)
             match &left {
-                Expr::Ident { .. } | Expr::FieldAccess { .. } | Expr::Index { .. } => {
+                Expr::Ident { .. } | Expr::FieldAccess { .. } => {
                     let value = self.parse_assign()?;
                     let span = Span {
                         start: left.span().start,
@@ -582,21 +582,6 @@ impl<'src> Parser<'src> {
                     }
                 }
 
-                Token::LBracket => {
-                    self.advance();
-                    let index = self.parse_expr()?;
-                    let rbracket_tok = self.expect(&Token::RBracket, "expected ']' after index expression")?;
-                    let span = Span {
-                        start: expr.span().start,
-                        end: rbracket_tok.span.end,
-                    };
-                    expr = Expr::Index {
-                        object: Box::new(expr),
-                        index: Box::new(index),
-                        span,
-                    };
-                }
-
                 // Phase 3: Type operations (is, as)
                 Token::Is => {
                     self.advance();
@@ -851,10 +836,6 @@ impl<'src> Parser<'src> {
                 self.parse_block()
             }
 
-            Token::LBracket => {
-                self.parse_vector()
-            }
-
             // Phase 2: Binding and control flow
             Token::Let => self.parse_let(),
 
@@ -918,182 +899,6 @@ impl<'src> Parser<'src> {
         let span = Span { start: start_span.start, end: end_span };
 
         Some(Expr::Block { exprs, span })
-    }
-
-    /// Parse a vector expression: "[" ... "]"
-    ///
-    /// **Grammar:**
-    /// - Literal: "[" Expr ("," Expr)* "]"
-    /// - Generator: "[" Expr "|" IDENT "in" Expr "]"
-    /// - Empty: "[]"
-    fn parse_vector(&mut self) -> Option<Expr> {
-        let start_span = self.current.span;
-        self.expect(&Token::LBracket, "expected '['")?;
-
-        // Check for empty vector
-        if self.check(&Token::RBracket) {
-            self.advance();
-            let span = Span {
-                start: start_span.start,
-                end: self.current.span.end,
-            };
-            return Some(Expr::VectorLit {
-                elements: vec![],
-                span,
-            });
-        }
-
-        // Parse first element
-        let first_expr = match self.parse_expr() {
-            Some(e) => e,
-            None => self.error_expr(),
-        };
-        let first_is_error = matches!(first_expr, Expr::Error { .. });
-
-        // The generator syntax uses `|`, which is also the boolean OR token.
-        // If parsing consumed it as `left | ident` and the next token is `in`,
-        // recover that shape as a vector generator.
-        if !first_is_error && self.check(&Token::In) {
-            if let Expr::BinaryOp { op: BinOp::Or, left, right, .. } = &first_expr {
-                if let Expr::Ident { name: var, .. } = right.as_ref() {
-                    if self.expect(&Token::In, "expected 'in' after generator variable").is_none() {
-                        self.recover_to(&[Token::RBracket]);
-                        let end = if self.check(&Token::RBracket) {
-                            let rbracket = self.current.clone();
-                            self.advance();
-                            rbracket.span.end
-                        } else {
-                            self.current.span.end
-                        };
-                        return Some(Expr::Error { span: Span { start: start_span.start, end } });
-                    }
-                    let iterable = match self.parse_expr() {
-                        Some(e) => e,
-                        None => self.error_expr(),
-                    };
-                    let rbracket = match self.expect(&Token::RBracket, "expected ']' to close vector") {
-                        Some(tok) => tok,
-                        None => {
-                            let end = self.current.span.end;
-                            return Some(Expr::Error { span: Span { start: start_span.start, end } });
-                        }
-                    };
-
-                    let span = Span {
-                        start: start_span.start,
-                        end: rbracket.span.end,
-                    };
-
-                    return Some(Expr::VectorGen {
-                        element: left.clone(),
-                        var: var.clone(),
-                        iterable: Box::new(iterable),
-                        span,
-                    });
-                }
-            }
-        }
-
-        // Check for generator pattern: "|"
-        if !first_is_error && self.matches(&Token::Pipe) {
-            let var = match self.peek() {
-                Token::Ident(name) => {
-                    let n = name.clone();
-                    self.advance();
-                    n
-                }
-                _ => {
-                    self.error_no_sync("expected variable name after '|'" );
-                    self.recover_to(&[Token::RBracket]);
-                    let end = if self.check(&Token::RBracket) {
-                        let rbracket = self.current.clone();
-                        self.advance();
-                        rbracket.span.end
-                    } else {
-                        self.current.span.end
-                    };
-                    return Some(Expr::Error { span: Span { start: start_span.start, end } });
-                }
-            };
-
-            if !self.matches(&Token::In) {
-                self.error_no_sync("expected 'in' after generator variable");
-                self.recover_to(&[Token::RBracket]);
-                let end = if self.check(&Token::RBracket) {
-                    let rbracket = self.current.clone();
-                    self.advance();
-                    rbracket.span.end
-                } else {
-                    self.current.span.end
-                };
-                return Some(Expr::Error { span: Span { start: start_span.start, end } });
-            }
-            let iterable = match self.parse_expr() {
-                Some(e) => e,
-                None => self.error_expr(),
-            };
-            let rbracket = match self.expect(&Token::RBracket, "expected ']' to close vector") {
-                Some(tok) => tok,
-                None => {
-                    let end = self.current.span.end;
-                    return Some(Expr::Error { span: Span { start: start_span.start, end } });
-                }
-            };
-
-            let span = Span {
-                start: start_span.start,
-                end: rbracket.span.end,
-            };
-
-            return Some(Expr::VectorGen {
-                element: Box::new(first_expr),
-                var,
-                iterable: Box::new(iterable),
-                span,
-            });
-        }
-
-        // Otherwise, parse as literal vector
-        let mut elements = vec![first_expr];
-
-        loop {
-            if self.matches(&Token::Comma) {
-                if self.check(&Token::RBracket) {
-                    break;
-                }
-                let elem = match self.parse_expr() {
-                    Some(e) => e,
-                    None => self.error_expr(),
-                };
-                if matches!(elem, Expr::Error { .. }) {
-                    self.recover_to(&[Token::Comma, Token::RBracket]);
-                }
-                elements.push(elem);
-                continue;
-            }
-
-            if self.check(&Token::RBracket) {
-                break;
-            }
-
-            self.error_no_sync("expected ',' or ']' after vector element");
-            if !self.recover_to(&[Token::Comma, Token::RBracket]) {
-                break;
-            }
-        }
-
-        let end_span = if self.check(&Token::RBracket) {
-            let rbracket = self.current.clone();
-            self.advance();
-            rbracket.span.end
-        } else {
-            self.error("expected ']' to close vector");
-            self.current.span.end
-        };
-
-        let span = Span { start: start_span.start, end: end_span };
-
-        Some(Expr::VectorLit { elements, span })
     }
 
     /// Parse an argument list: "(" (Expr ("," Expr)*)? ")"
@@ -1389,9 +1194,6 @@ impl<'src> Parser<'src> {
             Expr::Let { bindings, body, .. } => Expr::Let { bindings, body, span: new_span },
             Expr::Assign { target, value, .. } => Expr::Assign { target, value, span: new_span },
             Expr::Block { exprs, .. } => Expr::Block { exprs, span: new_span },
-            Expr::VectorLit { elements, .. } => Expr::VectorLit { elements, span: new_span },
-            Expr::VectorGen { element, var, iterable, .. } => Expr::VectorGen { element, var, iterable, span: new_span },
-            Expr::Index { object, index, .. } => Expr::Index { object, index, span: new_span },
             Expr::Lambda { params, return_type, body, .. } => Expr::Lambda { params, return_type, body, span: new_span },
             Expr::Error { .. } => Expr::Error { span: new_span },
         }
@@ -1916,9 +1718,6 @@ impl HasSpan for Expr {
             Expr::Let { span, .. } => *span,
             Expr::Assign { span, .. } => *span,
             Expr::Block { span, .. } => *span,
-            Expr::VectorLit { span, .. } => *span,
-            Expr::VectorGen { span, .. } => *span,
-            Expr::Index { span, .. } => *span,
             Expr::Lambda { span, .. } => *span,
             Expr::Error { span } => *span,
         }

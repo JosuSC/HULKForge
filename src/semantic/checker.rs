@@ -1129,30 +1129,6 @@ impl SemanticChecker {
                 }
                 self.ctx.pop_scope();
             }
-            Expr::VectorLit { elements, .. } => {
-                for e in elements {
-                    self.check_expr(e);
-                }
-                self.check_vector_literal_types(elements);
-            }
-            Expr::VectorGen { element, var, iterable, .. } => {
-                self.check_expr(iterable);
-                self.with_scope(|this| {
-                    this.define_var(var, expr_span(expr));
-                    if let Some(element_ty) = this.infer_iterable_element_type(iterable) {
-                        this.ctx.set_var_type(var, element_ty);
-                    }
-                    this.check_expr(element);
-                    if let Some(loop_item_ty) = this.ctx.var_type(var) {
-                        this.record_iterable_element_type(iterable, loop_item_ty);
-                    }
-                });
-            }
-            Expr::Index { object, index, .. } => {
-                self.check_expr(object);
-                self.check_expr(index);
-                self.mark_iterable_usage(object);
-            }
             Expr::Lambda { params, return_type, body, .. } => {
                 let mut seen = HashSet::new();
                 for param in params {
@@ -1196,11 +1172,6 @@ impl SemanticChecker {
 
             Expr::FieldAccess { .. } => {
                 self.check_expr(target);
-            }
-
-            Expr::Index { object, index, .. } => {
-                self.check_expr(object);
-                self.check_expr(index);
             }
 
             Expr::Error { .. } => {}
@@ -1485,21 +1456,6 @@ impl SemanticChecker {
                         }
                     }
                 }
-            }
-
-            Expr::VectorLit { elements, .. } => {
-                let mut expected: Option<SimpleType> = None;
-                for element in elements {
-                    let Some(element_ty) = self.infer_simple_type(element) else {
-                        continue;
-                    };
-                    match &expected {
-                        Some(expected_ty) if expected_ty != &element_ty => return None,
-                        None => expected = Some(element_ty),
-                        _ => {}
-                    }
-                }
-                expected.map(|ty| SimpleType::Vector(Box::new(ty)))
             }
 
             _ => None,
@@ -1887,25 +1843,6 @@ impl SemanticChecker {
                 }
                 result
             }
-            Expr::VectorLit { elements, .. } => {
-                let mut expected: Option<SimpleType> = None;
-                for element in elements {
-                    let Some(element_ty) = self.infer_expr_with_scopes(element, ctx) else {
-                        continue;
-                    };
-                    match &expected {
-                        Some(expected_ty) if expected_ty != &element_ty => return None,
-                        None => expected = Some(element_ty),
-                        _ => {}
-                    }
-                }
-                expected.map(|ty| SimpleType::Vector(Box::new(ty)))
-            }
-            Expr::VectorGen { element, iterable, .. } => {
-                self.infer_expr_with_scopes(iterable, ctx)?;
-                self.infer_expr_with_scopes(element, ctx)
-            }
-            Expr::Index { object, .. } => self.infer_expr_with_scopes(object, ctx),
             Expr::Lambda { params, return_type, body, .. } => {
                 let mut lambda_ctx = ctx.clone();
                 lambda_ctx.push_scope();
@@ -2024,7 +1961,6 @@ fn expr_span(expr: &Expr) -> Span {
         Expr::New { span, .. } => *span,
         Expr::FieldAccess { span, .. } => *span,
         Expr::MethodCall { span, .. } => *span,
-        
         Expr::Base { span, .. } => *span,
         Expr::BinaryOp { span, .. } => *span,
         Expr::UnaryOp { span, .. } => *span,
@@ -2036,9 +1972,6 @@ fn expr_span(expr: &Expr) -> Span {
         Expr::Let { span, .. } => *span,
         Expr::Assign { span, .. } => *span,
         Expr::Block { span, .. } => *span,
-        Expr::VectorLit { span, .. } => *span,
-        Expr::VectorGen { span, .. } => *span,
-        Expr::Index { span, .. } => *span,
         Expr::Lambda { span, .. } => *span,
         Expr::Error { span } => *span,
     }

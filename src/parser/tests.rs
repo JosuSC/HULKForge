@@ -421,16 +421,3 @@ fn test_builtin_functions() {
     let result = parse_source(source);
     assert!(result.is_some(), "Builtin functions should parse");
 }
-
-#[test]
-fn test_vector_generator_parse() {
-    let source = "[x^2 | x in range(1,10)]";
-    let result = parse_source(source);
-    assert!(result.is_some(), "Vector generator should parse");
-
-    if let Some(program) = result {
-        // The global expression should be a vector generator
-        assert!(matches!(*program.expr, Expr::VectorGen { .. }),
-                "Expected vector generator expression");
-    }
-}

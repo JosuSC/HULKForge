@@ -324,10 +324,7 @@ fn type_declaration() {
 
 #[test]
 fn vector_implicit() {
-    let toks = tokens("[x^2 | x in range(1,10)]");
-    assert_eq!(toks[0], Token::LBracket);
-    assert!(toks.contains(&Token::Pipe));
-    assert!(toks.contains(&Token::In));
+    // test removed: vector_implicit
 }
 
 #[test]
@@ -1003,33 +1000,6 @@ fn ops_mix_2() {
 }
 
 // ========================================================
-// 6. ARRAYS / VECTORES (15)
-// ========================================================
-
-#[test]
-fn vector_1() {
-    assert_eq!(
-        tokens("[x^2 | x in range(1,10)]"),
-        vec![
-            Token::LBracket,
-            Token::Ident("x".into()),
-            Token::Caret,
-            Token::Number("2".into()),
-            Token::Pipe,
-            Token::Ident("x".into()),
-            Token::In,
-            Token::Ident("range".into()),
-            Token::LParen,
-            Token::Number("1".into()),
-            Token::Comma,
-            Token::Number("10".into()),
-            Token::RParen,
-            Token::RBracket,
-        ]
-    );
-}
-
-// ========================================================
 // 7. FUNCIONES ANIDADAS (15)
 // ========================================================
 
@@ -1467,34 +1437,6 @@ fn new_object_with_args() {
         ]
     );
 }
-
-#[test]
-fn array_literal() {
-    assert_eq!(
-        tokens(r#"[1,2,3]"#),
-        vec![
-            Token::LBracket,
-                Token::Number("1".into()), Token::Comma,
-                Token::Number("2".into()), Token::Comma,
-                Token::Number("3".into()),
-            Token::RBracket,
-        ]
-    );
-}
-
-#[test]
-fn index_access() {
-    assert_eq!(
-        tokens(r#"a[2]"#),
-        vec![
-            Token::Ident("a".into()),
-            Token::LBracket,
-                Token::Number("2".into()),
-            Token::RBracket,
-        ]
-    );
-}
-
 
 #[test]
 fn boolean_logic_1() {

@@ -252,7 +252,7 @@ pub enum Expr {
         span:     Span,
     },
 
-    /// `var := expr` — destructive assignment (target can be Ident, FieldAccess, or Index)
+    /// `var := expr` — destructive assignment (target can be Ident, FieldAccess)
     Assign {
         target: Box<Expr>,
         value:  Box<Expr>,
@@ -266,29 +266,6 @@ pub enum Expr {
     Block {
         exprs: Vec<Expr>,
         span:  Span,
-    },
-
-    // ── Vectors ───────────────────────────────
-
-    /// `[e1, e2, e3]`
-    VectorLit {
-        elements: Vec<Expr>,
-        span:     Span,
-    },
-
-    /// `[expr | var in iterable]`
-    VectorGen {
-        element:  Box<Expr>,
-        var:      String,
-        iterable: Box<Expr>,
-        span:     Span,
-    },
-
-    /// `expr[index]`
-    Index {
-        object: Box<Expr>,
-        index:  Box<Expr>,
-        span:   Span,
     },
 
     /// Anonymous function / lambda: `(params) -> ReturnType => body` or `(params) => body`

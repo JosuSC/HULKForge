@@ -878,60 +878,6 @@ fn print_expr(expr: &Expr, printer: &TreePrinter) {
             let span_printer = printer.child(true);
             print_span(*span, &span_printer);
         }
-        Expr::VectorLit { elements, span } => {
-            printer.line("VectorLit");
-
-            let elements_printer = printer.child(false);
-            if elements.is_empty() {
-                elements_printer.line("elements: []");
-            } else {
-                elements_printer.line("elements");
-                for (idx, element) in elements.iter().enumerate() {
-                    let child = elements_printer.child(idx + 1 == elements.len());
-                    print_expr(element, &child);
-                }
-            }
-
-            let span_printer = printer.child(true);
-            print_span(*span, &span_printer);
-        }
-        Expr::VectorGen {
-            element,
-            var,
-            iterable,
-            span,
-        } => {
-            printer.line(&format!("VectorGen(var={})", var));
-
-            let element_printer = printer.child(false);
-            element_printer.line("element");
-            let element_child = element_printer.child(true);
-            print_expr(element, &element_child);
-
-            let iterable_printer = printer.child(false);
-            iterable_printer.line("iterable");
-            let iterable_child = iterable_printer.child(true);
-            print_expr(iterable, &iterable_child);
-
-            let span_printer = printer.child(true);
-            print_span(*span, &span_printer);
-        }
-        Expr::Index { object, index, span } => {
-            printer.line("Index");
-
-            let object_printer = printer.child(false);
-            object_printer.line("object");
-            let object_child = object_printer.child(true);
-            print_expr(object, &object_child);
-
-            let index_printer = printer.child(false);
-            index_printer.line("index");
-            let index_child = index_printer.child(true);
-            print_expr(index, &index_child);
-
-            let span_printer = printer.child(true);
-            print_span(*span, &span_printer);
-        }
         Expr::Lambda {
             params,
             return_type,

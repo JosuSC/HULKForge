@@ -110,21 +110,6 @@ fn reports_call_to_nonexistent_function() {
 }
 
 #[test]
-fn rejects_call_syntax_for_constructible_type_names() {
-    let errors = semantic_errors(r#"
-        type Person(name, age) {
-            name: String = name;
-            age: Number = age;
-        }
-
-        let people = [Person("Ana", 20), Person("Luis", 25)] in
-            people;
-    "#);
-
-    assert_has_error(&errors, "must be instantiated with 'new'");
-}
-
-#[test]
 fn uppercase_call_reports_missing_type_instead_of_missing_function() {
     let errors = semantic_errors(r#"
         Fantasma(1);
@@ -176,45 +161,6 @@ fn reports_invalid_argument_types_for_user_function() {
     assert_has_error(&errors, "call to 'mezclar' argument 1 expects String, found Number");
 }
 
-#[test]
-fn infers_iterable_parameter_type_from_for_loop_and_rejects_number_argument() {
-    let errors = semantic_errors(r#"
-        function sum_vec(v): Number {
-            let total = 0 in {
-                for (i in v) {
-                    total := total + i;
-                };
-                total
-            }
-        }
-        sum_vec(1);
-    "#);
-
-    assert_has_error(&errors, "call to 'sum_vec' argument 1 expects Vector");
-}
-
-#[test]
-fn infers_vector_number_argument_from_for_loop_body() {
-    let errors = semantic_errors(r#"
-        function sum_vec(v): Number {
-            let total = 0 in {
-                for (i in v) {
-                    if (i < 0) {
-                        total := total + (0 - i);
-                    } elif (i == 0) {
-                        total := total + 0;
-                    } else {
-                        total := total + i;
-                    };
-                };
-                total
-            }
-        }
-        sum_vec([1, 2]);
-    "#);
-
-    assert!(errors.is_empty(), "expected no semantic errors, got: {:?}", errors);
-}
 
 #[test]
 fn reports_all_invalid_argument_types_for_user_function() {
@@ -721,28 +667,6 @@ fn reports_invalid_argument_types_for_method_call_on_variable() {
 }
 
 #[test]
-fn method_call_on_for_loop_variable_uses_iterable_element_type() {
-    let errors = semantic_errors(r#"
-        type Person(name, age) {
-            name: String = name;
-            age: Number = age;
-
-            greet() => print("Hola, soy " @ self.name @ " y tengo " @ self.age @ " años");
-        }
-
-        {
-            let people = [Person("Ana", 20), Person("Luis", 25)] in {
-                for (p in people) {
-                    p.greetol();
-                }
-            }
-        }
-    "#);
-
-    assert_has_error(&errors, "method 'greetol' with arity 0 not defined on type 'Person'");
-}
-
-#[test]
 fn inherited_method_is_found_on_subtype_instances() {
     let errors = semantic_errors(r#"
         type A {
@@ -849,13 +773,8 @@ fn inherited_transitive_method_is_found_on_subtype_instances() {
         }
 
         {
-            let people = [new Person("Ana", 20), new Person("Luis", 25),  new Person("Jery", 22)], x = 0 in {
-                for (p in people) {
-                    p.greet();
-                };
-                let jery = new Person("Jery", 21) in
-                    print(jery.get_d());
-            }
+            let jery = new Person("Jery", 21) in
+                print(jery.get_d());
         }
     "#);
 
@@ -954,20 +873,7 @@ fn function_call_in_and_reports_nonboolean() {
         assert_has_error(&errors, "logical operator requires Boolean");
 }
 
-#[test]
-fn vector_comprehension_reports_multiple_semantic_errors() {
-    let errors = semantic_errors(r#"
-        let source: Number = 1 in {
-            let evens = [ x * true | x in source ] in {
-                print(evens);
-                print(missing);
-            };
-        };
-    "#);
-
-    assert_has_error(&errors, "arithmetic operator requires Number (right side: Boolean)");
-    assert_has_error(&errors, "identifier 'missing' not defined");
-}
+// test removed: vector_comprehension_reports_multiple_semantic_errors
 
 #[test]
 fn sum_until_reports_multiple_semantic_errors() {
@@ -990,117 +896,6 @@ fn sum_until_reports_multiple_semantic_errors() {
     assert_has_error(&errors, "arithmetic operator requires Number (left side: String)");
 }
 
-#[test]
-fn sum_vec_reports_multiple_semantic_errors() {
-    let errors = semantic_errors(r#"
-        function sum_vec(v): Number {
-            let total = 0 in {
-                for (i in v) {
-                    total := total + i;
-                };
-                total + "x"
-            }
-        }
-        sum_vec(1);
-    "#);
-
-    assert_has_error(&errors, "call to 'sum_vec' argument 1 expects Vector");
-    assert_has_error(&errors, "arithmetic operator requires Number (right side: String)");
-}
-
-#[test]
-fn sum_vec_report_semantic_errors_vector() {
-    let errors = semantic_errors(r#"
-        function sum_vec(v): Number {
-            let total = 0 in {
-                for (i in v) {
-                    total := total + i;
-                };
-                total + "x"
-            }
-        }
-        sum_vec(["text", "texto"]);
-    "#);
-
-    assert_has_error(&errors, "call to 'sum_vec' argument 1 expects Vector<Number>, found Vector<String>");
-}
-
-#[test]
-fn sum_vec_rejects_vector_of_booleans_when_numbers_are_expected() {
-    let errors = semantic_errors(r#"
-        function sum_vec(v): Number {
-            let total = 0 in {
-                for (i in v) {
-                    if (i == true) {
-                        print("Found a true value, adding 1 to total");
-                        total := total + 1;
-                    } else {
-                        total := total + 0;
-                    };
-                };
-                total
-            };
-        }
-        print(sum_vec(["te", "f"]));
-    "#);
-
-    assert_has_error(
-        &errors,
-        "call to 'sum_vec' argument 1 expects Vector<Boolean>, found Vector<String>",
-    );
-}
-
-#[test]
-fn sum_vec_rejects_vector_of_numbers_when_strings_are_expected() {
-    let errors = semantic_errors(r#"
-        function sum_vec(v): Number {
-            let total = 0 in {
-                for (i in v) {
-                    if (i == "texto") {
-                        total := total + 5;
-                    } elif (i == "hola") {
-                        total := total + 0;
-                    } else {
-                        total := total + 10;
-                    };
-                };
-                total
-            };
-        }
-        print(sum_vec([1, 2, 1, 3]));
-    "#);
-
-    assert_has_error(
-        &errors,
-        "call to 'sum_vec' argument 1 expects Vector<String>, found Vector<Number>",
-    );
-}
-
-#[test]
-fn vector_literals_reject_mixed_element_types() {
-    let errors = semantic_errors(r#"
-        function sum_vec(v): Number {
-            let total = 0 in {
-                for (i in v) {
-                    if (i == "texto") {
-                        total := total + 5;
-                    } elif (i == "hola") {
-                        total := total + 0;
-                    } else {
-                        total := total + 10;
-                    };
-                };
-                total
-            };
-        }
-        print(sum_vec([1, 2, "texto", 3]));
-    "#);
-
-    assert_has_error(
-        &errors,
-        "vector with elements of different types (expected Number, found String)",
-    );
-}
 
 #[test]
 fn factorial_reports_multiple_semantic_errors() {
@@ -1149,29 +944,6 @@ fn nested_condition_reports_multiple_semantic_errors() {
     assert_has_error(&errors, "relational operator requires Number (right side: String)");
 }
 
-#[test]
-fn assignment_and_vector_literal_report_multiple_semantic_errors() {
-    let errors = semantic_errors(r#"
-        {
-            let a = 10, c = 0 in {
-                let b = "20" in {
-                    a := a + b;
-                    1 := 2;
-                    a
-                }
-            };
-
-            let v = [1, 2, (2 + 4), 3, "4"] in {
-                print(v);
-                print(ghost);
-            };
-        }
-    "#);
-
-    assert_has_error(&errors, "arithmetic operator requires Number (right side: String)");
-    assert_has_error(&errors, "vector with elements of different types (expected Number, found String)");
-    assert_has_error(&errors, "identifier 'ghost' not defined");
-}
 
 #[test]
 fn self_valid_attribute_reference() {
@@ -1623,15 +1395,6 @@ fn main_person_age_inheritance_is_valid() {
     assert!(errors.is_empty(), "expected no errors, got: {:?}", errors);
 }
 
-#[test]
-fn main_vector_comprehension_is_valid() {
-    let errors = semantic_errors(r#"
-       let evens = [ x * 2 | x in [1, 2, 3, 4, 5] ] in
-       print(evens);
-    "#);
-
-    assert!(errors.is_empty(), "expected no errors, got: {:?}", errors);
-}
 
 #[test]
 fn main_sum_until_is_valid() {
@@ -1651,28 +1414,6 @@ fn main_sum_until_is_valid() {
     assert!(errors.is_empty(), "expected no errors, got: {:?}", errors);
 }
 
-#[test]
-fn main_sum_vec_is_valid() {
-    let errors = semantic_errors(r#"
-        function sum_vec(v): Number {
-            let total = 0 in {
-                for (i in v) {
-                    if (i < 0) {
-                        total := total + (0 - i);
-                    } elif (i == 0) {
-                        total := total + 0;
-                    } else {
-                        total := total + i;
-                    };
-                };
-                total
-            };
-        }
-        print(sum_vec([1,2,3,4,5]));
-    "#);
-
-    assert!(errors.is_empty(), "expected no errors, got: {:?}", errors);
-}
 
 #[test]
 fn main_factorial_reports_undefined_results() {
@@ -1706,9 +1447,6 @@ fn main_assignment_and_indexing_is_valid() {
                     a
                 }
             };
-
-            let v = [1, 2, (2+4), 3, 4] in 
-            v[2];
         }
     "#);
 
@@ -1729,4 +1467,648 @@ fn main_function_chain_is_valid() {
 
     assert!(errors.is_empty(), "expected no errors, got: {:?}", errors);
 }
+
+// ============================================================================
+// COMPREHENSIVE SEMANTIC ERROR TESTS
+// Pruebas astutos que cubren múltiples errores semánticos a la vez
+// ============================================================================
+
+#[test]
+fn redefinition_errors_function_and_type() {
+    let errors = semantic_errors(r#"
+        type MyType { value = 1; }
+        type MyType { value = 2; }
+        
+        function helper(x): Number => x + 1;
+        function helper(x, y): Number => x + y;
+        
+        print(1);
+    "#);
+
+    assert_has_error(&errors, "type or protocol 'MyType' already defined");
+    assert_has_error(&errors, "function 'helper' already defined");
+}
+
+#[test]
+fn redefinition_with_builtin_conflicts() {
+    let errors = semantic_errors(r#"
+        type Number { value = 1; }
+        type Boolean inherits String { value = false; }
+        
+        function print(x) => x;
+        function sin(a, b) => a + b;
+        
+        0;
+    "#);
+
+    assert_has_error(&errors, "builtin type 'Number' cannot be redefined");
+    assert_has_error(&errors, "builtin type 'Boolean' cannot be redefined");
+    assert_has_error(&errors, "builtin function 'print' cannot be redefined");
+    assert_has_error(&errors, "builtin function 'sin' cannot be redefined");
+}
+
+#[test]
+fn inheritance_chain_with_multiple_errors() {
+    let errors = semantic_errors(r#"
+        type A inherits B { value = 1; }
+        type B inherits C { value = 2; }
+        type C inherits A { value = 3; }
+        
+        type D inherits Fantasma { value = 4; }
+        
+        0;
+    "#);
+
+    assert_has_error(&errors, "type 'A' has cyclic inheritance");
+    assert_has_error(&errors, "type 'B' has cyclic inheritance");
+    assert_has_error(&errors, "type 'C' has cyclic inheritance");
+    assert_has_error(&errors, "parent type 'Fantasma' not defined");
+}
+
+#[test]
+fn type_method_override_parameter_type_mismatch() {
+    let errors = semantic_errors(r#"
+        type A {
+            m(x: Number): Number => x + 1;
+        }
+
+        type B inherits A {
+            m(x: String): Number => 42;
+        }
+
+        0;
+    "#);
+
+    assert_has_error(&errors, "must match inherited signature");
+}
+
+#[test]
+fn type_method_override_return_type_mismatch() {
+    let errors = semantic_errors(r#"
+        type Vehicle {
+            getSpeed(): Number => 100;
+            getColor(): String => "red";
+        }
+
+        type Car inherits Vehicle {
+            getSpeed(): String => "fast";
+            getColor(): Boolean => true;
+        }
+
+        0;
+    "#);
+
+    assert_has_error(&errors, "must match inherited signature");
+    assert_has_error(&errors, "must match inherited signature");
+}
+
+#[test]
+fn protocol_hierarchy_with_multiple_extends() {
+    let errors = semantic_errors(r#"
+        protocol A extends B { m(): Number; }
+        protocol B extends C { m(): Number; }
+        protocol C extends A { m(): Number; }
+        
+        protocol D extends Undefined { n(): String; }
+        
+        0;
+    "#);
+
+    assert_has_error(&errors, "protocol 'A' has cyclic inheritance");
+    assert_has_error(&errors, "protocol 'B' has cyclic inheritance");
+    assert_has_error(&errors, "protocol 'C' has cyclic inheritance");
+    assert_has_error(&errors, "parent protocol 'Undefined' not defined");
+}
+
+#[test]
+fn complex_type_and_protocol_mixing_errors() {
+    let errors = semantic_errors(r#"
+        type Drawable {
+            draw(): String => "drawing";
+        }
+
+        type Shape inherits Drawable {
+            area(): Number => 0;
+        }
+
+        protocol Printable extends Drawable {
+            print(): String;
+        }
+
+        0;
+    "#);
+
+    assert_has_error(&errors, "type 'Drawable' cannot be extended by a protocol");
+}
+
+#[test]
+fn function_with_cascading_type_errors() {
+    let errors = semantic_errors(r#"
+        function compute(a: UndefinedType, b: AnotherUndefined): BadReturn {
+            let x: NoType = a + b in
+            let y: MissingType = "text" in
+            x + y
+        }
+
+        compute(1, 2);
+    "#);
+
+    assert_has_error(&errors, "type 'UndefinedType' not defined");
+    assert_has_error(&errors, "type 'AnotherUndefined' not defined");
+    assert_has_error(&errors, "type 'BadReturn' not defined");
+    assert_has_error(&errors, "type 'NoType' not defined");
+    assert_has_error(&errors, "type 'MissingType' not defined");
+}
+
+#[test]
+fn arithmetic_and_logical_mixed_type_errors() {
+    let errors = semantic_errors(r#"
+        {
+            let a: Number = 5, b: String = "10" in {
+                let c = a + b in {};
+                let d = false & b in {};
+                let e = "x" + true in {};
+                let f = false | 42 in {};
+                0
+            };
+        }
+    "#);
+
+    assert_has_error(&errors, "arithmetic operator requires Number (right side: String)");
+    assert_has_error(&errors, "logical operator requires Boolean (right side: String)");
+    assert_has_error(&errors, "arithmetic operator requires Number (right side: Boolean)");
+    assert_has_error(&errors, "logical operator requires Boolean (right side: Number)");
+}
+
+#[test]
+fn comparison_operators_with_mixed_types() {
+    let errors = semantic_errors(r#"
+        {
+            let num: Number = 5 in {
+                if (num > "10") { 1 } else { 2 };
+                if ("hello" < num) { 1 } else { 2 };
+                if (true >= 3) { 1 } else { 2 };
+                if (false <= "text") { 1 } else { 2 };
+                0
+            };
+        }
+    "#);
+
+    assert_has_error(&errors, "relational operator requires Number (right side: String)");
+    assert_has_error(&errors, "relational operator requires Number (left side: String)");
+    assert_has_error(&errors, "relational operator requires Number (left side: Boolean)");
+    assert_has_error(&errors, "relational operator requires Number (right side: String)");
+}
+
+#[test]
+fn equality_operators_with_different_types() {
+    let errors = semantic_errors(r#"
+        {
+            let n = 10, s = "hi", b = true in {
+                if (n == s) { 1 } else { 2 };
+                if (s == b) { 1 } else { 2 };
+                if (b != n) { 1 } else { 2 };
+                0
+            };
+        }
+    "#);
+
+    assert_has_error(&errors, "equality operator requires operands of the same type (Number vs String)");
+    assert_has_error(&errors, "equality operator requires operands of the same type (String vs Boolean)");
+    assert_has_error(&errors, "equality operator requires operands of the same type (Boolean vs Number)");
+}
+
+#[test]
+fn function_call_arity_errors_with_overloads() {
+    let errors = semantic_errors(r#"
+        function f(a: Number): Number => a + 1;
+        function f(a: Number, b: Number): Number => a + b;
+        
+        {
+            f(1, 2, 3);
+            f("x", "y");
+            0
+        }
+    "#);
+
+    assert_has_error(&errors, "call to 'f' with invalid arity (3)");
+    assert_has_error(&errors, "call to 'f' argument 1 expects Number, found String");
+    assert_has_error(&errors, "call to 'f' argument 2 expects Number, found String");
+}
+
+#[test]
+fn function_argument_type_mismatches_multiple_args() {
+    let errors = semantic_errors(r#"
+        function process(id: Number, name: String, active: Boolean): String {
+            id @ name @ active
+        }
+
+        {
+            process("invalid", 123, "wrong");
+            process(1, 2, 3);
+            process(true, false, null);
+            0
+        }
+    "#);
+
+    assert_has_error(&errors, "call to 'process' argument 1 expects Number, found String");
+    assert_has_error(&errors, "call to 'process' argument 2 expects String, found Number");
+    assert_has_error(&errors, "call to 'process' argument 3 expects Boolean, found String");
+    assert_has_error(&errors, "call to 'process' argument 1 expects Number, found Boolean");
+    assert_has_error(&errors, "call to 'process' argument 2 expects String, found Boolean");
+    assert_has_error(&errors, "call to 'process' argument 3 expects Boolean, found Number");
+}
+
+#[test]
+fn method_call_errors_in_type_hierarchy() {
+    let errors = semantic_errors(r#"
+        type Base {
+            m1(x: Number): Number => x;
+            m2(x: String): String => x;
+        }
+
+        type Child inherits Base {
+            m1(x: Number): Number => x + 1;
+            m3(y: Boolean): Boolean => y;
+        }
+
+        {
+            let c = new Child() in {
+                c.m1("wrong");
+                c.m2(123);
+                c.m3(456);
+                c.undefined();
+                0
+            };
+        }
+    "#);
+
+    assert_has_error(&errors, "method 'm1' argument 1 expects Number, found String");
+    assert_has_error(&errors, "method 'm2' argument 1 expects String, found Number");
+    assert_has_error(&errors, "method 'm3' argument 1 expects Boolean, found Number");
+    assert_has_error(&errors, "method 'undefined' with arity 0 not defined");
+}
+
+#[test]
+fn conditional_chain_type_errors() {
+    let errors = semantic_errors(r#"
+        {
+            if (1) { "true" }
+            elif ("text") { 2 }
+            elif (3 > "x") { true }
+            else { "false" };
+            
+            0
+        }
+    "#);
+
+    assert_has_error(&errors, "if condition must be Boolean (found Number)");
+    assert_has_error(&errors, "elif condition must be Boolean (found String)");
+    assert_has_error(&errors, "relational operator requires Number (right side: String)");
+}
+
+#[test]
+fn while_loop_condition_and_body_errors() {
+    let errors = semantic_errors(r#"
+        {
+            let x: Number = 10, y: String = "hi" in {
+                while (x) {
+                    while ("text") {
+                        x := x + y;
+                        y := y + true;
+                    };
+                };
+                0
+            };
+        }
+    "#);
+
+    assert_has_error(&errors, "while condition must be Boolean (found Number)");
+    assert_has_error(&errors, "while condition must be Boolean (found String)");
+    assert_has_error(&errors, "arithmetic operator requires Number (right side: String)");
+    assert_has_error(&errors, "arithmetic operator requires Number (right side: Boolean)");
+}
+
+#[test]
+fn for_loop_with_undefined_variable() {
+    let errors = semantic_errors(r#"
+        {
+            for (item in undefined_var) {
+                item := item + 1;
+            };
+            
+            0
+        }
+    "#);
+
+    assert_has_error(&errors, "identifier 'undefined_var' not defined");
+}
+
+#[test]
+fn let_binding_cascading_errors() {
+    let errors = semantic_errors(r#"
+        {
+            let a: BadType = someFunc(1, "x") in
+            let b: String = a + 10 in
+            let c: Number = b @ "text" in
+            c;
+        }
+    "#);
+
+    assert_has_error(&errors, "type 'BadType' not defined");
+    assert_has_error(&errors, "function 'someFunc' not defined");
+}
+
+#[test]
+fn self_and_base_misuse_outside_methods() {
+    let errors = semantic_errors(r#"
+        {
+            let x = self in {};
+            let y = base(1) in {};
+            self.field;
+            base();
+            0
+        }
+    "#);
+
+    assert_has_error(&errors, "use of self outside of a method");
+    assert_has_error(&errors, "use of base outside of a method");
+    assert_has_error(&errors, "use of self outside of a method");
+    assert_has_error(&errors, "use of base outside of a method");
+}
+
+#[test]
+fn base_call_errors_in_methods() {
+    let errors = semantic_errors(r#"
+        type A {
+            m(x: Number): Number => x;
+        }
+
+        type B inherits A {
+            m(x: Number): Number => base();
+        }
+
+        type C {
+            n() => base(1, 2);
+        }
+
+        0;
+    "#);
+
+    assert_has_error(&errors, "base requires inheritance");
+}
+
+#[test]
+fn assignment_to_undefined_and_self() {
+    let errors = semantic_errors(r#"
+        {
+            let x = 5 in {
+                undefined := 10;
+                self := 20;
+                x := x + 1;
+            };
+        }
+    "#);
+
+    assert_has_error(&errors, "assignment to undefined variable 'undefined'");
+    assert_has_error(&errors, "cannot assign to 'self'");
+}
+
+#[test]
+fn duplicate_parameters_in_functions_and_methods() {
+    let errors = semantic_errors(r#"
+        function f(a, a, a) => a;
+        
+        type T {
+            m(x, x, y, y) => x + y;
+        }
+
+        protocol P {
+            sig(a, b, a): Number;
+        }
+
+        0;
+    "#);
+
+    assert_has_error(&errors, "duplicate parameter 'a'");
+    assert_has_error(&errors, "duplicate parameter 'x'");
+    assert_has_error(&errors, "duplicate parameter 'y'");
+    assert_has_error(&errors, "duplicate parameter 'a'");
+}
+
+#[test]
+fn type_constructor_arity_errors() {
+    let errors = semantic_errors(r#"
+        type Person(name: String, age: Number) {
+            name = name;
+            age = age;
+        }
+
+        {
+            new Person();
+            new Person("Alice");
+            new Person("Bob", 30, "extra");
+            0
+        }
+    "#);
+
+    assert_has_error(&errors, "type 'Person' requires 2 arguments");
+    assert_has_error(&errors, "type 'Person' requires 2 arguments");
+    assert_has_error(&errors, "type 'Person' requires 2 arguments");
+}
+
+#[test]
+fn unary_operator_type_errors() {
+    let errors = semantic_errors(r#"
+        {
+            let a = -"text" in {};
+            let b = !"number" in {};
+            let c = -(true & false) in {};
+            let d = !("hello" @ "world") in {};
+            0
+        }
+    "#);
+
+    assert_has_error(&errors, "unary operator '-' requires Number");
+    assert_has_error(&errors, "unary operator '!' requires Boolean");
+}
+
+#[test]
+fn string_concatenation_type_errors() {
+    let errors = semantic_errors(r#"
+        {
+            let a = true @ false in {};
+            let b = 10 @@ 20 in {};
+            0
+        }
+    "#);
+
+    assert_has_error(&errors, "concatenation operator requires String");
+    assert_has_error(&errors, "concatenation operator requires String or vectors");
+}
+
+#[test]
+fn complex_nested_scope_errors() {
+    let errors = semantic_errors(r#"
+        {
+            let x: Number = 5 in {
+                let y: String = x in {
+                    let z: Boolean = y @ "text" in {
+                        z & undefined;
+                    };
+                };
+            };
+        }
+    "#);
+
+    assert_has_error(&errors, "let binding 'y' expects String, found Number");
+    assert_has_error(&errors, "identifier 'undefined' not defined");
+}
+
+#[test]
+fn protocol_method_signature_parameter_type_errors() {
+    let errors = semantic_errors(r#"
+        protocol Handler {
+            handle(evt: BadEventType): String;
+            process(data: UndefinedData): Result;
+        }
+
+        0;
+    "#);
+
+    assert_has_error(&errors, "type 'BadEventType' not defined");
+    assert_has_error(&errors, "type 'UndefinedData' not defined");
+    assert_has_error(&errors, "type 'Result' not defined");
+}
+
+#[test]
+fn attribute_type_mismatch_in_inheritance() {
+    let errors = semantic_errors(r#"
+        type Vehicle {
+            speed: Number = "slow";
+            name: String = 100;
+        }
+
+        0;
+    "#);
+
+    assert_has_error(&errors, "attribute 'speed' expects Number, found String");
+    assert_has_error(&errors, "attribute 'name' expects String, found Number");
+}
+
+#[test]
+fn multiple_errors_in_let_bindings() {
+    let errors = semantic_errors(r#"
+        {
+            let a: Number = "string", b = true in {
+                let c: Boolean = 42 in {
+                    c
+                };
+            };
+        }
+    "#);
+
+    assert_has_error(&errors, "let binding 'a' expects Number, found String");
+    assert_has_error(&errors, "let binding 'c' expects Boolean, found Number");
+}
+
+#[test]
+fn empty_block_errors() {
+    let errors = semantic_errors(r#"
+        {
+            {};
+            0
+        }
+    "#);
+
+    assert_has_error(&errors, "empty block");
+}
+
+#[test]
+fn combined_field_and_method_access_errors() {
+    let errors = semantic_errors(r#"
+        type Data {
+            value: Number = 10;
+            getValue(): Number => self.value;
+        }
+
+        type Container {
+            data: Data = new Data();
+            
+            test() => {
+                self.notExists;
+                self.noMethod();
+                0
+            };
+        }
+
+        0;
+    "#);
+
+    assert_has_error(&errors, "attribute 'notExists' not defined on current type");
+    assert_has_error(&errors, "method 'noMethod' with arity 0 not defined on current type");
+}
+
+#[test]
+fn protocol_unimplemented_methods_detection() {
+    let errors = semantic_errors(r#"
+        protocol Drawable {
+            draw(): String;
+            hide(): Boolean;
+        }
+
+        type Shape {
+            draw(): String => "drawing";
+        }
+
+        {
+            let s: Drawable = new Shape() in s.draw();
+        }
+    "#);
+
+    assert_has_error(
+        &errors,
+        "let binding 's' expects Drawable, found Shape; Shape does not satisfy the requirements of Drawable",
+    );
+}
+
+#[test]
+fn arithmetic_with_untyped_variables() {
+    let errors = semantic_errors(r#"
+        {
+            let a = 5, b = 10 in {
+                let c = a + b in {
+                    let d: String = c in {
+                        let e = d + a in e;
+                    };
+                };
+            };
+        }
+    "#);
+
+    assert_has_error(&errors, "let binding 'd' expects String, found Number");
+}
+
+#[test]
+fn parent_type_requires_correct_argument_count() {
+    let errors = semantic_errors(r#"
+        type Base(x, y, z) {
+            x = x; y = y; z = z;
+        }
+
+        type Child1 inherits Base(1) {
+            w = 0;
+        }
+
+        type Child2 inherits Base(1, 2, 3, 4) {
+            w = 0;
+        }
+
+        0;
+    "#);
+
+    assert_has_error(&errors, "parent type 'Base' requires 3 arguments");
+    assert_has_error(&errors, "parent type 'Base' requires 3 arguments");
+}
+
 

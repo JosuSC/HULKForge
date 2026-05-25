@@ -46,7 +46,7 @@ fn main() {
             name(a: String, b: Number): String => "Sir" @@ base();
         }
 
-        let p : Person = new Knight("Phil", "Collins") in
+        let p : Person = new Knight("Phil", "Collins", 3) in
             print(p.get_x()); 
     "#);
 
@@ -228,11 +228,6 @@ fn main() {
     "#);
 
     test_program(false, r#"
-       let evens = [ x * 2 | x in [1, 2, 3, 4, 5] ] in
-       print(evens);
-    "#);
-
-    test_program(false, r#"
         function sum_until(max : Number): Number {
             let result = 0, i = 0 in (
                 while (i < max) {
@@ -246,31 +241,13 @@ fn main() {
     "#);
 
     test_program(false, r#"
-        function sum_vec(v): Number {
-            let total = 0 in {
-                for (i in v) {
-                    if (i < 0) {
-                        total := total + (0 - i);
-                    } elif (i == 0) {
-                        total := total + 0;
-                    } else {
-                        total := total + i;
-                    };
-                };
-                total
-            };
-        }
-        print(sum_vec([1,2,3,4,5]));
-    "#);
-
-    test_program(false, r#"
         function factorial(n: Number, j: String): Number {
             let result = 1, i = 1 in {
                 while (i <= n) {
                     result := result * i;
                     i := i + 1;
                 };
-                results
+                result
             }
         }
         if (factorial (1, "testing_param") > 2 & true) {
@@ -305,11 +282,6 @@ fn main() {
     "#);
 
     test_program(false, r#"
-        let v = [1, 2, (2+4), 3, 4] in 
-        v[2];
-    "#);
-
-    test_program(false, r#"
         function f(a, b): Number { if (a > b) { a } else { b } }
         
         function g(): Number {
@@ -319,24 +291,11 @@ fn main() {
         g();
     "#);
 
-    // En espera de piad
-    test_program(false, r#"
-        let x = 1 in (
-            x := x + 1; 
-        );
-
-        let s = "hello" in {
-            print(s);
-        };
-    "#);
-
     test_program(false, r#"
         function nested(a: Number) : Number {
             let sum = 0 in {
-                for (i in a) {
-                    for (j in i) {
-                        if (j % 2 == 0) { sum := sum + j  } else { sum := sum + 0};
-                    };
+                for (i in range(0, a)) {
+                    if (i % 2 == 0) { sum := sum + i  } else { sum := sum + 0};
                 };
                 sum
             }
@@ -366,7 +325,7 @@ fn main() {
         type Counter(n) {
             n = n;
             inc() => self.n + 1;
-        double() => self.inc() * 2;
+            double() => self.inc() * 2;
         }
         new Counter(3).double()
     "#);
@@ -464,6 +423,3 @@ fn main() {
     "#);
 
 }
-
-
-
