@@ -340,6 +340,7 @@ pub struct TokenStream<'src> {
 }
 
 impl<'src> TokenStream<'src> {
+    /// Create a token stream for one source string.
     pub fn new(source: &'src str) -> Self {
         Self {
             inner:       InnerLexer::new(source),
