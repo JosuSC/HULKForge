@@ -300,7 +300,7 @@ fn print_method_def(m: &crate::parser::MethodDef, printer: &TreePrinter) {
             let child = params_printer.child(idx + 1 == m.params.len());
             print_param(param, &child);
         }
-            /// Print one protocol declaration.
+            // Print one protocol declaration.
     }
 
     let return_printer = printer.child(false);
