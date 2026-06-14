@@ -34,4 +34,5 @@ coverage/
 perf.data
 perf.data.old
 flamegraph.svg
-hulk-docs.md
+hulk-documentation.md
+orientacion.md
