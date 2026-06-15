@@ -119,7 +119,11 @@ pub enum Token {
     #[token("true")]     True,
     #[token("false")]    False,
     #[token("base")]     Base,
-    #[token("protocol")] Protocol,
+    // `interface` is accepted as a synonym for `protocol` so the same structural
+    // type machinery serves both the HULK spec keyword and the Matcom test suite.
+    #[token("protocol")]
+    #[token("interface")]
+    Protocol,
     #[token("extends")]  Extends,
 
     // ---------------------------------------------

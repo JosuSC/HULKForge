@@ -551,6 +551,11 @@ impl<'src> Parser<'src> {
                             self.advance();
                             n
                         }
+                        // `base` is a valid attribute/method name outside parent-calls.
+                        Token::Base => {
+                            self.advance();
+                            "base".to_string()
+                        }
                         _ => {
                             self.error("expected field name after '.'");
                             return Some(Expr::Error { span: field_span });
@@ -1387,6 +1392,12 @@ impl<'src> Parser<'src> {
                 Token::Ident(n) => {
                     self.advance();
                     n
+                }
+                // Allow `base` as an attribute/method name (it is only the parent-call
+                // keyword when immediately followed by `(`).
+                Token::Base => {
+                    self.advance();
+                    "base".to_string()
                 }
                 _ => {
                     self.error_no_sync("expected member name");
