@@ -533,11 +533,73 @@ impl<'a> Codegen<'a> {
                 t
             }
             Expr::AsType { expr, .. } => self.gen_expr(expr),
-            Expr::For { .. } => {
-                // Iterables are out of scope for the required suite; produce a no-op value.
-                let t = self.fresh();
-                self.emit(&format!("Value {} = mk_num(0);", t));
-                t
+            Expr::For { var, iterable, body, .. } => {
+                // Desugar `for (x in iterable) body` into a C while-loop.
+                // Two cases:
+                //   1) range(lo, hi) → counted loop from lo to hi-1
+                //   2) custom iterator → call .next() / .current() protocol
+                let result = self.fresh();
+                self.emit(&format!("Value {} = mk_num(0);", result));
+
+                // Detect range(lo, hi) call
+                if let Expr::Call { callee, args, .. } = &**iterable {
+                    if let Expr::Ident { name, .. } = &**callee {
+                        if name == "range" && args.len() == 2 {
+                            // for (x in range(lo, hi)) body
+                            // →
+                            // let _i = lo; while (_i < hi) { let x = _i; body; _i := _i + 1 }
+                            let lo_val = self.gen_expr(&args[0]);
+                            let hi_val = self.gen_expr(&args[1]);
+                            let iter_var = self.new_var("_iter");
+                            self.emit(&format!("Value {} = {};", iter_var, lo_val));
+                            self.emit("while (1) {");
+                            let cmp = self.fresh();
+                            self.emit(&format!("Value {} = hulk_lt({}, {});", cmp, iter_var, hi_val));
+                            self.emit(&format!("if (!{}.b) break;", cmp));
+                            // Bind loop variable
+                            self.scopes.push(HashMap::new());
+                            let x_var = self.new_var(var);
+                            self.emit(&format!("Value {} = {};", x_var, iter_var));
+                            let bv = self.gen_expr(body);
+                            self.emit(&format!("{} = {};", result, bv));
+                            self.scopes.pop();
+                            // Increment iterator
+                            let one = self.fresh();
+                            self.emit(&format!("Value {} = mk_num(1);", one));
+                            self.emit(&format!("{} = hulk_add({}, {});", iter_var, iter_var, one));
+                            self.emit("}");
+                            return result;
+                        }
+                    }
+                }
+
+                // Generic iterator: for (x in obj) body
+                // Desugar: while (obj.next()) { let x = obj.current(); body }
+                let iter_val = self.gen_expr(iterable);
+                self.emit("while (1) {");
+                // Call .next() on the iterator
+                let next_slot = *self.method_slots.get("next").unwrap_or(&0);
+                let next_result = self.fresh();
+                self.emit(&format!(
+                    "Value {} = vtables[{}.obj->type_id][{}]({}, NULL);",
+                    next_result, iter_val, next_slot, iter_val
+                ));
+                self.emit(&format!("if (!{}.b) break;", next_result));
+                // Bind loop variable to .current()
+                self.scopes.push(HashMap::new());
+                let cur_slot = *self.method_slots.get("current").unwrap_or(&0);
+                let cur_result = self.fresh();
+                self.emit(&format!(
+                    "Value {} = vtables[{}.obj->type_id][{}]({}, NULL);",
+                    cur_result, iter_val, cur_slot, iter_val
+                ));
+                let x_var = self.new_var(var);
+                self.emit(&format!("Value {} = {};", x_var, cur_result));
+                let bv = self.gen_expr(body);
+                self.emit(&format!("{} = {};", result, bv));
+                self.scopes.pop();
+                self.emit("}");
+                result
             }
             Expr::Error { .. } => {
                 let t = self.fresh();
