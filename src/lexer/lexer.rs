@@ -173,6 +173,16 @@ pub enum Token {
     #[token(">=")] GtEq,          // Greater than or equal.
     #[token("->")] ThinArrow,     // Return type arrow in lambda headers.
 
+    // Compound assignment (extension): `x += e` desugars to `x := x + e`,
+    // composing with operator overloading.
+    #[token("+=")] PlusEq,
+    #[token("-=")] MinusEq,
+    #[token("*=")] StarEq,
+    #[token("/=")] SlashEq,
+    #[token("%=")] PercentEq,
+    #[token("^=")] CaretEq,
+    #[token("@=")] AtEq,
+
     // ---------------------------------------------
     // SINGLE-CHARACTER OPERATORS
     // ---------------------------------------------

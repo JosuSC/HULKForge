@@ -1,0 +1,32 @@
+// Extension: compound assignment operators. `lhs OP= rhs` desugars to
+// `lhs := lhs OP rhs`, so it works for variables, vector elements and object
+// fields, and composes with operator overloading.
+
+type Vec2(x: Number, y: Number) {
+    x = x;
+    y = y;
+    plus(o: Vec2): Vec2 => new Vec2(self.x + o.x, self.y + o.y);
+}
+
+{
+    let acc = 0 in {
+        for (i in range(1, 5)) acc += i;   // 1+2+3+4
+        print(acc);                          // 10
+    };
+
+    let a = new Number[3]{ i -> i } in {
+        a[2] *= 10;                          // index target
+        print(a[2]);                         // 20
+    };
+
+    let greeting = "Hello" in {
+        greeting @= ", World";               // string concat
+        print(greeting);                     // Hello, World
+    };
+
+    let v = new Vec2(1, 1) in {
+        v += new Vec2(2, 3);                 // uses Vec2.plus (operator overloading)
+        print(v.x);                          // 3
+        print(v.y);                          // 4
+    };
+}

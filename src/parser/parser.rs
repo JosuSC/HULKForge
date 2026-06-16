@@ -280,6 +280,34 @@ impl<'src> Parser<'src> {
             }
         }
 
+        // Compound assignment (extension): `lhs OP= rhs` desugars to
+        // `lhs := lhs OP rhs`, reusing assignment + binary-op semantics (and thus
+        // operator overloading). Re-evaluates `lhs` once at each side of the sugar.
+        if let Some(op) = compound_assign_op(self.peek()) {
+            self.advance();
+            match &left {
+                Expr::Ident { .. } | Expr::FieldAccess { .. } | Expr::Index { .. } => {
+                    let rhs = self.parse_assign()?;
+                    let span = Span { start: left.span().start, end: rhs.span().end };
+                    let combined = Expr::BinaryOp {
+                        op,
+                        left: Box::new(left.clone()),
+                        right: Box::new(rhs),
+                        span,
+                    };
+                    return Some(Expr::Assign {
+                        target: Box::new(left),
+                        value: Box::new(combined),
+                        span,
+                    });
+                }
+                _ => {
+                    self.error("compound-assignment target must be an identifier, field access, or index");
+                    return Some(Expr::Error { span: left.span() });
+                }
+            }
+        }
+
         Some(left)
     }
 
@@ -1842,6 +1870,20 @@ impl<'src> Parser<'src> {
 /// This is used during parsing to compute spans for binary operators, etc.
 trait HasSpan {
     fn span(&self) -> Span;
+}
+
+/// Map a compound-assignment token (`+=`, `-=`, …) to its binary operator.
+fn compound_assign_op(tok: &Token) -> Option<BinOp> {
+    match tok {
+        Token::PlusEq => Some(BinOp::Add),
+        Token::MinusEq => Some(BinOp::Sub),
+        Token::StarEq => Some(BinOp::Mul),
+        Token::SlashEq => Some(BinOp::Div),
+        Token::PercentEq => Some(BinOp::Mod),
+        Token::CaretEq => Some(BinOp::Pow),
+        Token::AtEq => Some(BinOp::Concat),
+        _ => None,
+    }
 }
 
 impl HasSpan for Expr {
