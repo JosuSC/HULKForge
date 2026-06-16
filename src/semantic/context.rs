@@ -62,7 +62,7 @@ impl Context {
             functions: HashMap::new(),
             function_signatures: HashMap::new(),
             types: HashMap::new(),
-            protocols: HashMap::new(),
+            protocols: builtin_protocols(),
             builtin_functions: builtin_functions(),
             builtin_function_signatures: builtin_function_signatures(),
             builtin_types: builtin_types(),
@@ -299,6 +299,16 @@ impl Context {
         None
     }
 
+    /// Register a synthesized protocol (A.9.5) along with its method requirements.
+    pub(super) fn insert_synth_protocol(
+        &mut self,
+        name: &str,
+        methods: HashMap<String, HashMap<usize, CallableSignature>>,
+    ) {
+        self.protocols
+            .insert(name.to_string(), ProtocolInfo { extends: None, methods });
+    }
+
     /// Register a protocol name.
     pub(super) fn insert_protocol(&mut self, name: &str, extends: Option<String>) {
         self.protocols.entry(name.to_string()).or_insert(ProtocolInfo {
@@ -531,19 +541,26 @@ impl Context {
         }
 
         for (actual_param, expected_param) in actual.params.iter().zip(expected.params.iter()) {
-            let (Some(actual_param), Some(expected_param)) = (actual_param, expected_param) else {
-                return false;
-            };
-            if !self.simple_type_conforms_to(expected_param, actual_param) {
-                return false;
+            match (actual_param, expected_param) {
+                // An undetermined (synthesized) protocol parameter imposes no
+                // constraint, so any actual parameter type is accepted.
+                (_, None) => {}
+                (Some(actual_param), Some(expected_param)) => {
+                    if !self.simple_type_conforms_to(expected_param, actual_param) {
+                        return false;
+                    }
+                }
+                (None, Some(_)) => return false,
             }
         }
 
         match (&actual.return_type, &expected.return_type) {
+            // An undetermined (synthesized) protocol return imposes no constraint.
+            (_, None) => true,
             (Some(actual_return), Some(expected_return)) => {
                 self.simple_type_conforms_to(actual_return, expected_return)
             }
-            _ => false,
+            (None, Some(_)) => false,
         }
     }
 
@@ -585,6 +602,36 @@ impl Context {
                 }
             }
             _ => false,
+        }
+    }
+
+    /// Lowest common ancestor of two types in the Object-rooted hierarchy (A.9.2),
+    /// used to type multi-branch `if` expressions. Number/String/Boolean only join
+    /// with themselves (otherwise Object); vectors join element-wise; named types
+    /// walk up to the most specific common ancestor.
+    pub(super) fn lowest_common_ancestor(&self, a: &SimpleType, b: &SimpleType) -> SimpleType {
+        if a == b {
+            return a.clone();
+        }
+        match (a, b) {
+            (SimpleType::Named(an), SimpleType::Named(bn)) => {
+                let mut current = Some(an.clone());
+                let mut seen = HashSet::new();
+                while let Some(t) = current {
+                    if !seen.insert(t.clone()) {
+                        break;
+                    }
+                    if self.type_is_subtype_of(bn, &t) {
+                        return SimpleType::Named(t);
+                    }
+                    current = self.types.get(&t).and_then(|info| info.parent.clone());
+                }
+                SimpleType::Named("Object".to_string())
+            }
+            (SimpleType::Vector(at), SimpleType::Vector(bt)) => {
+                SimpleType::Vector(Box::new(self.lowest_common_ancestor(at, bt)))
+            }
+            _ => SimpleType::Named("Object".to_string()),
         }
     }
 
@@ -711,6 +758,41 @@ fn signature_map(
             (arity, CallableSignature { params, return_type })
         })
         .collect()
+}
+
+/// Builtin protocols that ship with HULK (A.11): the `Iterable` protocol that the
+/// `for` loop is built on, and `Enumerable` for re-iterable collections. Users may
+/// still redeclare them; a user declaration overrides these via `set_protocol_members`.
+fn builtin_protocols() -> HashMap<String, ProtocolInfo> {
+    let mut protocols = HashMap::new();
+
+    // protocol Iterable { next(): Boolean; current(): Object; }
+    let mut iterable_methods = HashMap::new();
+    iterable_methods.insert(
+        "next".to_string(),
+        signature_map(vec![(0, vec![], Some(SimpleType::Boolean))]),
+    );
+    iterable_methods.insert(
+        "current".to_string(),
+        signature_map(vec![(0, vec![], Some(SimpleType::Named("Object".to_string())))]),
+    );
+    protocols.insert(
+        "Iterable".to_string(),
+        ProtocolInfo { extends: None, methods: iterable_methods },
+    );
+
+    // protocol Enumerable { iter(): Iterable; }
+    let mut enumerable_methods = HashMap::new();
+    enumerable_methods.insert(
+        "iter".to_string(),
+        signature_map(vec![(0, vec![], Some(SimpleType::Named("Iterable".to_string())))]),
+    );
+    protocols.insert(
+        "Enumerable".to_string(),
+        ProtocolInfo { extends: None, methods: enumerable_methods },
+    );
+
+    protocols
 }
 
 /// Insert an arity into the map for a given name.

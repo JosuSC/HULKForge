@@ -56,6 +56,8 @@ pub struct SemanticChecker {
     errors: Vec<SemanticError>,
     variable_type_issues: HashMap<String, String>,
     function_return_issues: HashMap<String, String>,
+    /// Counter for naming synthesized protocols during inference (A.9.5).
+    synth_counter: usize,
 }
 
 impl SemanticChecker {
@@ -66,6 +68,40 @@ impl SemanticChecker {
             errors: Vec::new(),
             variable_type_issues: HashMap::new(),
             function_return_issues: HashMap::new(),
+            synth_counter: 0,
+        }
+    }
+
+    /// Synthesize protocols (A.9.5) for any unannotated parameters that are used
+    /// structurally as method receivers in `body`, and bind each such parameter to
+    /// its synthesized protocol so the body type-checks and call sites are verified
+    /// against the structural requirements.
+    fn synthesize_param_protocols(&mut self, params: &[Param], body: &Expr) {
+        for param in params {
+            if param.ty.is_some() || is_placeholder(&param.name) {
+                continue; // explicitly annotated parameters need no synthesis
+            }
+            if self.ctx.var_type(&param.name).is_some() {
+                continue; // already has an inferred type
+            }
+            let mut reqs: HashMap<(String, usize), Option<SimpleType>> = HashMap::new();
+            collect_method_reqs(&param.name, body, None, &mut reqs);
+            if reqs.is_empty() {
+                continue;
+            }
+            let proto_name = format!("__Synth{}", self.synth_counter);
+            self.synth_counter += 1;
+            let mut methods: HashMap<String, HashMap<usize, CallableSignature>> = HashMap::new();
+            for ((m, arity), ret) in reqs {
+                // An undetermined return type stays `None` (an "Any" placeholder),
+                // keeping downstream uses permissive until a later use pins it.
+                methods
+                    .entry(m)
+                    .or_default()
+                    .insert(arity, CallableSignature { params: vec![None; arity], return_type: ret });
+            }
+            self.ctx.insert_synth_protocol(&proto_name, methods);
+            self.ctx.set_var_type(&param.name, SimpleType::Named(proto_name));
         }
     }
 
@@ -198,6 +234,12 @@ impl SemanticChecker {
         self.ctx.push_scope();
         for param in &decl.params {
             self.define_var(&param.name, param.span);
+        }
+        {
+            let body_expr = match &decl.body {
+                FuncBody::Inline(e) | FuncBody::Block(e) => e.as_ref(),
+            };
+            self.synthesize_param_protocols(&decl.params, body_expr);
         }
         self.check_func_body(&decl.body);
 
@@ -470,6 +512,12 @@ impl SemanticChecker {
         self.ctx.push_scope();
         for param in &method.params {
             self.define_var(&param.name, param.span);
+        }
+        {
+            let body_expr = match &method.body {
+                FuncBody::Inline(e) | FuncBody::Block(e) => e.as_ref(),
+            };
+            self.synthesize_param_protocols(&method.params, body_expr);
         }
         self.check_func_body(&method.body);
 
@@ -1365,19 +1413,16 @@ impl SemanticChecker {
             }
 
             Expr::If { then_expr, elif_branches, else_expr, .. } => {
-                let then_ty = self.infer_simple_type(then_expr)?;
+                // The type of a multi-branch `if` is the lowest common ancestor of all
+                // branch types (A.9.2), or ultimately Object.
+                let mut acc = self.infer_simple_type(then_expr)?;
                 for branch in elif_branches {
                     let branch_ty = self.infer_simple_type(&branch.body)?;
-                    if branch_ty != then_ty {
-                        return None;
-                    }
+                    acc = self.ctx.lowest_common_ancestor(&acc, &branch_ty);
                 }
                 let else_ty = self.infer_simple_type(else_expr)?;
-                if else_ty == then_ty {
-                    Some(then_ty)
-                } else {
-                    None
-                }
+                acc = self.ctx.lowest_common_ancestor(&acc, &else_ty);
+                Some(acc)
             }
 
             Expr::While { body, .. } => self.infer_simple_type(body),
@@ -1947,6 +1992,115 @@ fn callable_params_from_sig_params(params: &[SigParam]) -> Vec<Option<SimpleType
 /// Is this a placeholder name produced by the parser?
 fn is_placeholder(name: &str) -> bool {
     name.is_empty() || name == "__parse_error__"
+}
+
+/// Walk `e` collecting structural method requirements on `param` for A.9.5 protocol
+/// synthesis. `ctx_ty` is the type the enclosing operator expects of the current
+/// expression, used to infer a synthesized method's return type (String for `@`/`@@`,
+/// Number for arithmetic, etc.). Stops recursing where `param` is shadowed.
+fn collect_method_reqs(
+    param: &str,
+    e: &Expr,
+    ctx_ty: Option<SimpleType>,
+    reqs: &mut HashMap<(String, usize), Option<SimpleType>>,
+) {
+    match e {
+        Expr::MethodCall { object, method, args, .. } => {
+            if matches!(&**object, Expr::Ident { name, .. } if name == param) {
+                let ret = ctx_ty.clone();
+                reqs.entry((method.clone(), args.len()))
+                    .and_modify(|existing| {
+                        // Prefer a determined (Some) return over an undetermined one.
+                        if existing.is_none() && ret.is_some() {
+                            *existing = ret.clone();
+                        }
+                    })
+                    .or_insert(ret);
+            }
+            collect_method_reqs(param, object, None, reqs);
+            for a in args {
+                collect_method_reqs(param, a, None, reqs);
+            }
+        }
+        Expr::BinaryOp { op, left, right, .. } => {
+            let child = match op {
+                BinOp::Concat | BinOp::ConcatSpace => Some(SimpleType::String),
+                BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div | BinOp::Mod
+                | BinOp::Pow | BinOp::Lt | BinOp::Gt | BinOp::LtEq | BinOp::GtEq => Some(SimpleType::Number),
+                BinOp::And | BinOp::Or => Some(SimpleType::Boolean),
+                BinOp::Eq | BinOp::NotEq => None,
+            };
+            collect_method_reqs(param, left, child.clone(), reqs);
+            collect_method_reqs(param, right, child, reqs);
+        }
+        Expr::UnaryOp { op, operand, .. } => {
+            let child = match op {
+                UnaryOp::Neg => Some(SimpleType::Number),
+                UnaryOp::Not => Some(SimpleType::Boolean),
+            };
+            collect_method_reqs(param, operand, child, reqs);
+        }
+        Expr::Call { callee, args, .. } => {
+            collect_method_reqs(param, callee, None, reqs);
+            for a in args {
+                collect_method_reqs(param, a, None, reqs);
+            }
+        }
+        Expr::New { args, .. } | Expr::Base { args, .. } => {
+            for a in args {
+                collect_method_reqs(param, a, None, reqs);
+            }
+        }
+        Expr::FieldAccess { object, .. } => collect_method_reqs(param, object, None, reqs),
+        Expr::IsType { expr, .. } | Expr::AsType { expr, .. } => {
+            collect_method_reqs(param, expr, None, reqs)
+        }
+        Expr::If { condition, then_expr, elif_branches, else_expr, .. } => {
+            collect_method_reqs(param, condition, Some(SimpleType::Boolean), reqs);
+            collect_method_reqs(param, then_expr, ctx_ty.clone(), reqs);
+            for b in elif_branches {
+                collect_method_reqs(param, &b.condition, Some(SimpleType::Boolean), reqs);
+                collect_method_reqs(param, &b.body, ctx_ty.clone(), reqs);
+            }
+            collect_method_reqs(param, else_expr, ctx_ty, reqs);
+        }
+        Expr::While { condition, body, .. } => {
+            collect_method_reqs(param, condition, Some(SimpleType::Boolean), reqs);
+            collect_method_reqs(param, body, None, reqs);
+        }
+        Expr::For { var, iterable, body, .. } => {
+            collect_method_reqs(param, iterable, None, reqs);
+            if var != param {
+                collect_method_reqs(param, body, None, reqs);
+            }
+        }
+        Expr::Let { bindings, body, .. } => {
+            let mut shadowed = false;
+            for b in bindings {
+                if !shadowed {
+                    collect_method_reqs(param, &b.init, None, reqs);
+                }
+                if b.name == param {
+                    shadowed = true;
+                }
+            }
+            if !shadowed {
+                collect_method_reqs(param, body, ctx_ty, reqs);
+            }
+        }
+        Expr::Assign { target, value, .. } => {
+            collect_method_reqs(param, target, None, reqs);
+            collect_method_reqs(param, value, None, reqs);
+        }
+        Expr::Block { exprs, .. } => {
+            let n = exprs.len();
+            for (i, ex) in exprs.iter().enumerate() {
+                let c = if i + 1 == n { ctx_ty.clone() } else { None };
+                collect_method_reqs(param, ex, c, reqs);
+            }
+        }
+        _ => {}
+    }
 }
 
 fn is_self_ref(expr: &Expr) -> bool {

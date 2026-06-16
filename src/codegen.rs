@@ -56,6 +56,12 @@ impl<'a> Codegen<'a> {
         let mut type_order = Vec::new();
         let mut attr_slots: HashMap<String, usize> = HashMap::new();
         let mut method_slots: HashMap<String, usize> = HashMap::new();
+        // Reserve stable slots for the iterator protocol so the `for` loop can probe
+        // them in every type's vtable (an unimplemented method stays NULL).
+        for m in ["next", "current", "iter"] {
+            let n = method_slots.len();
+            method_slots.entry(m.to_string()).or_insert(n);
+        }
         for d in &program.decls {
             if let Decl::Type(t) = d {
                 let id = type_order.len();
@@ -379,6 +385,14 @@ impl<'a> Codegen<'a> {
             Expr::Ident { name, .. } => {
                 if let Some(v) = self.lookup(name) {
                     v
+                } else if name == "PI" {
+                    let t = self.fresh();
+                    self.emit(&format!("Value {} = mk_num(3.14159265358979323846);", t));
+                    t
+                } else if name == "E" {
+                    let t = self.fresh();
+                    self.emit(&format!("Value {} = mk_num(2.71828182845904523536);", t));
+                    t
                 } else {
                     // Unknown identifier as a value: should not occur in checked programs.
                     let t = self.fresh();
@@ -560,10 +574,18 @@ impl<'a> Codegen<'a> {
                 }
 
                 // General iterable object: drive the HULK iterator protocol
-                // `next(): Boolean` / `current(): T` through dynamic dispatch.
-                let it = self.gen_expr(iterable);
-                let snext = *self.method_slots.get("next").unwrap_or(&0);
-                let scur = *self.method_slots.get("current").unwrap_or(&0);
+                // `next(): Boolean` / `current(): T` through dynamic dispatch. If the
+                // object has no `next` it is treated as Enumerable: call `iter()` to
+                // obtain a fresh iterator first (A.11.3).
+                let it0 = self.gen_expr(iterable);
+                let snext = self.method_slots["next"];
+                let scur = self.method_slots["current"];
+                let siter = self.method_slots["iter"];
+                let it = self.fresh();
+                self.emit(&format!(
+                    "Value {it} = (vtables[{o}.obj->type_id][{sn}] == 0) ? vtables[{o}.obj->type_id][{si}]({o}, NULL) : {o};",
+                    it = it, o = it0, sn = snext, si = siter
+                ));
                 self.emit(&format!(
                     "while (vtables[{it}.obj->type_id][{sn}]({it}, NULL).b) {{",
                     it = it, sn = snext
@@ -612,10 +634,18 @@ impl<'a> Codegen<'a> {
                     self.emit(&format!("Value {} = hulk_print({});", t, a));
                     return t;
                 }
-                "sqrt" | "sin" | "cos" | "exp" | "log" => {
+                "sqrt" | "sin" | "cos" | "exp" => {
                     let a = self.gen_expr(&args[0]);
                     let t = self.fresh();
                     self.emit(&format!("Value {} = mk_num({}({}.num));", t, name, a));
+                    return t;
+                }
+                // log(base, value) computes the logarithm of `value` in `base`.
+                "log" => {
+                    let base = self.gen_expr(&args[0]);
+                    let val = self.gen_expr(&args[1]);
+                    let t = self.fresh();
+                    self.emit(&format!("Value {} = mk_num(log({}.num) / log({}.num));", t, val, base));
                     return t;
                 }
                 "rand" => {
