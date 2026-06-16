@@ -698,7 +698,13 @@ impl<'src> Parser<'src> {
             Token::StringLit(value) => {
                 let value = value.clone();
                 self.advance();
-                Some(Expr::StringLit { value, span })
+                // String interpolation (extension): `"a ${e} b"` desugars to
+                // `"a " @ e @ " b"`. Plain literals (no `${`) are unchanged.
+                if value.contains("${") {
+                    Some(self.build_interpolation(&value, span))
+                } else {
+                    Some(Expr::StringLit { value, span })
+                }
             }
 
             Token::True => {
@@ -1054,6 +1060,74 @@ impl<'src> Parser<'src> {
         let span = Span { start: start_span.start, end: end_span };
 
         Some(Expr::Block { exprs, span })
+    }
+
+    /// Desugar an interpolated string literal `"a ${e1} b ${e2}"` into a chain of
+    /// `@` concatenations: `"a " @ e1 @ " b " @ e2`. The leading literal segment
+    /// (possibly empty) anchors the chain so the result is always a String, even for
+    /// `"${n}"` where `n` is a Number. Embedded `${ ... }` use balanced-brace matching.
+    fn build_interpolation(&mut self, s: &str, span: Span) -> Expr {
+        let chars: Vec<char> = s.chars().collect();
+        let mut segments: Vec<(bool, String)> = Vec::new(); // (is_expr, text)
+        let mut lit = String::new();
+        let mut i = 0;
+        while i < chars.len() {
+            if chars[i] == '$' && i + 1 < chars.len() && chars[i + 1] == '{' {
+                segments.push((false, std::mem::take(&mut lit)));
+                i += 2;
+                let mut depth = 1;
+                let mut expr_src = String::new();
+                while i < chars.len() && depth > 0 {
+                    match chars[i] {
+                        '{' => { depth += 1; expr_src.push('{'); }
+                        '}' => { depth -= 1; if depth > 0 { expr_src.push('}'); } }
+                        c => expr_src.push(c),
+                    }
+                    i += 1;
+                }
+                segments.push((true, expr_src));
+            } else {
+                lit.push(chars[i]);
+                i += 1;
+            }
+        }
+        segments.push((false, lit));
+
+        // Fold: start with the (possibly empty) leading literal, then concatenate
+        // each expression and non-empty literal in order.
+        let mut iter = segments.into_iter();
+        let first = iter.next().map(|(_, t)| t).unwrap_or_default();
+        let mut result = Expr::StringLit { value: first, span };
+        for (is_expr, text) in iter {
+            let part = if is_expr {
+                self.parse_embedded(&text, span)
+            } else {
+                if text.is_empty() {
+                    continue;
+                }
+                Expr::StringLit { value: text, span }
+            };
+            result = Expr::BinaryOp {
+                op: BinOp::Concat,
+                left: Box::new(result),
+                right: Box::new(part),
+                span,
+            };
+        }
+        result
+    }
+
+    /// Lex + parse an embedded interpolation expression independently. Parse errors
+    /// are propagated into this parser's error list; the result span is collapsed to
+    /// the enclosing string literal's span.
+    fn parse_embedded(&mut self, src: &str, span: Span) -> Expr {
+        let stream = TokenStream::new(src);
+        let mut parser = Parser::new(stream);
+        let expr = parser.parse_expr().unwrap_or(Expr::Error { span });
+        for err in parser.errors.drain(..) {
+            self.errors.push(err);
+        }
+        Self::set_expr_span(expr, span)
     }
 
     /// Parse an argument list: "(" (Expr ("," Expr)*)? ")"

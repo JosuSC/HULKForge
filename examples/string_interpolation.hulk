@@ -1,0 +1,23 @@
+// Extension: string interpolation. `"... ${expr} ..."` desugars to a chain of
+// `@` concatenations, so any expression (variables, arithmetic, calls, indexing,
+// method calls) can be embedded. Plain string literals are unaffected.
+
+type Point(x: Number, y: Number) {
+    x = x;
+    y = y;
+    show(): String => "(${self.x}, ${self.y})";   // interpolation inside a method
+}
+
+{
+    let name = "HULK", version = 1 in
+        print("Welcome to ${name} v${version}!");          // Welcome to HULK v1!
+
+    let a = 6, b = 7 in
+        print("${a} * ${b} = ${a * b}");                   // 6 * 7 = 42
+
+    let nums = new Number[3]{ i -> i + 1 } in
+        print("first = ${nums[0]}, count = ${nums.size()}"); // first = 1, count = 3
+
+    let p = new Point(3, 4) in
+        print("p = ${p.show()}");                          // p = (3, 4)
+}
