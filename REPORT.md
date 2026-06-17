@@ -122,36 +122,73 @@ Otras optimizaciones más avanzadas (reordenamiento de instrucciones, asignació
 
 Finalmente, `evaluator/tests.rs` y el módulo `evaluator` permiten ejecutar programas de HULK en un entorno de prueba (interpretativo o de ejecución del IR), lo cual facilita la verificación de la corrección del codegen y las optimizaciones.
 
-
 ## 8. 📐 Análisis del Lenguaje HULK y Diseño de Extensiones
 
-Esta sección analiza con mayor profundidad el diseño del lenguaje HULK, su sistema de tipos y las extensiones propuestas o ya implementadas en el repositorio. Se ofrecen comparativas con lenguajes de referencia y justificaciones teóricas para cada decisión de diseño.
+Esta sección analiza con mayor profundidad el diseño del lenguaje HULK, su sistema de tipos y las extensiones propuestas. Se ofrecen comparativas con lenguajes de referencia y justificaciones teóricas para cada decisión de diseño.
 
-1) Sistema de Tipos de HULK
+### 1) Sistema de Tipos de HULK
 
-HULK incorpora tipos primitivos Number, Boolean y String, además de tipos compuestos como vectores y el tipo `Void` para funciones sin retorno. El sistema, tal como está implementado en `semantic/checker.rs`, se aproxima a un sistema de tipos estático y con comprobación en tiempo de compilación: los tipos de literales y las firmas de funciones se conocen en la compilación y la mayoría de las comprobaciones se hacen antes de la ejecución. Esto ofrece garantías de seguridad de tipo temprana (reducción de errores en tiempo de ejecución) y permite optimizaciones basadas en tipos.
+HULK (Havana University Language for Kompilers) es un lenguaje de programación didáctico, *type-safe*, orientado a objetos e incremental, diseñado para el curso de Introducción a los Compiladores en la Universidad de La Habana. Su diseño prioriza la seguridad de tipos y la claridad, permitiendo una curva de aprendizaje gradual para nosotros (el estudiantado).
 
-Desde la teoría, el sistema de HULK se clasifica como estático y relativamente fuerte: no se admiten coerciones implícitas inseguras por defecto, y las operaciones aplican reglas de compatibilidad explícitas. La implementación usa un enfoque de inferencia local —no Hindley–Milner completo— que deduce tipos a partir de literales y contexto inmediato. Esto simplifica la implementación y evita el coste de resolver variables de tipo generales en programas educativos.
+**Clasificación del Sistema de Tipos**
 
-Comparativa: contrastando con C# / Java (estático y fuerte) y Python / JavaScript (dinámico y débil/mixto), HULK se sitúa más cerca de C#/Java en cuanto a verificación temprana, pero con menos complejidad en inferencia. Frente a JavaScript, HULK evita errores de tipo tardíos a costa de mayor verbosidad en algunas anotaciones. Frente a Java, HULK carece hoy de genéricos y del sistema de subtipado robusto, lo que limita la expresividad pero reduce la superficie de errores para el público objetivo educativo.
+El sistema de tipos de HULK se clasifica como:
 
-2) Extensiones Implementadas y Justificación
+*   **Estático y Fuerte**: Los tipos se verifican en tiempo de compilación, y las operaciones no realizan coerciones implícitas inseguras. Esto se alinea con la filosofía de los lenguajes C# y Java, ofreciendo garantías de seguridad tempranas (reducción de errores en tiempo de ejecución).
+*   **Con Inferencia de Tipos Opcional**: HULK permite anotar tipos explícitamente, pero también puede inferirlos en la mayoría de los casos, simplificando la escritura de código. Esta característica didáctica permite a los estudiantes implementar primero un evaluador y luego abordar la verificación de tipos.
+*   **Nominal y Estructural**: La jerarquía de clases se basa en *tipado nominal*, donde la conformidad se define por herencia. Sin embargo, los **protocolos** introducen *tipado estructural*, permitiendo que un tipo implemente un protocolo implícitamente si tiene los métodos con las firmas adecuadas.
+
+**Comparativa con otros lenguajes**
+
+| Característica | HULK | C# / Java | Python / JavaScript |
+| :--- | :--- | :--- | :--- |
+| **Tipado** | Estático con inferencia | Estático y fuerte | Dinámico y débil/mixto |
+| **Verificación** | Compilación | Compilación | Ejecución |
+| **Complejidad** | Baja (educativo) | Alta | Media |
+| **Seguridad** | Alta | Alta | Baja (errores tardíos) |
+
+HULK se sitúa más cerca de C#/Java en cuanto a verificación temprana, pero con menos complejidad en su sistema de inferencia. Frente a JavaScript, evita errores de tipo tardíos a costa de mayor verbosidad en algunas anotaciones. Frente a Java, HULK carece de genéricos (aunque se proponen extensiones) y de un sistema de subtipado robusto como el de C# con sus variantes de varianza.
+
+### 2) Extensiones Implementadas y Justificación
+
+Las extensiones propuestas para HULK se han diseñado siguiendo un camino incremental para no sobrecargar la implementación base.
+
+1.  **Protocolos (Structural Typing)**
+    *   **Descripción**: Los protocolos permiten definir un conjunto de métodos que un tipo debe implementar. A diferencia de la herencia, la conformidad es implícita.
+    *   **Justificación**: Aportan una gran flexibilidad, permitiendo escribir código polimórfico que funciona con cualquier tipo que tenga ciertas capacidades, sin necesidad de que esos tipos hereden de una clase común. Esto es fundamental para funcionalidades como los iterables (`Iterable`).
+    *   **Fundamento Teórico**: Implementa la noción de *tipado estructural*, contrastando con el *tipado nominal* de las clases. La regla de conformidad con un protocolo es: `T <= P` si `T` tiene todos los métodos de `P` con tipos que respeten la varianza (los argumentos pueden ser de un tipo más general y el retorno de uno más específico).
+
+2.  **Iterables y Vectores**
+    *   **Descripción**: Se añade un protocolo `Iterable` (con métodos `next()` y `current()`). El método `next()` avanza el iterador y devuelve un `Boolean` indicando si existe un elemento siguiente; `current()` devuelve el elemento actual. El tipo `Vector` (array) implementa este protocolo. El bucle `for` se transpila a código que usa este protocolo.
+    *   **Justificación**: Permite manejar colecciones de datos de forma uniforme y eficiente, una necesidad básica en cualquier lenguaje de programación.
+    *   **Fundamento Teórico**: Introduce el concepto de *transpilación* para funcionalidades de alto nivel. El bucle `for` no es una construcción primitiva, sino *azúcar sintáctico* que se traduce a un bucle `while` estándar. Los vectores, con su sintaxis `T[]`, son un tipo genérico especial cuyo compilador genera un protocolo específico para el tipo de elemento.
+
+3.  **Inferencia de Tipos (Type Inference)**
+    *   **Descripción**: El compilador de Hulk incorpora un sistema de inferencia de tipos que permite al programador omitir las anotaciones de tipo en variables, parámetros y retornos de funciones, siempre que el contexto sea suficientemente explícito. El compilador deduce automáticamente el tipo más general posible basándose en el uso y las operaciones realizadas sobre los valores.
+    *   **Justificación**: Mejora significativamente la ergonomía del lenguaje, reduciendo la verbosidad y la carga cognitiva del programador, especialmente en código con tipos complejos o genéricos. Permite escribir código más conciso y mantenible sin sacrificar la seguridad de tipos.
+    *   **Fundamento Teórico**: Aunque no constituye una extensión gramatical del lenguaje (la sintaxis permanece inalterada), sí representa una extensión semántica e interna al compilador. Se basa en el algoritmo de *unificación* de Hindley-Milner (o una variante adaptada), que recorre el AST (Árbol de Sintaxis Abstracta) recogiendo restricciones de tipos y resolviéndolas para asignar tipos a todas las expresiones. Esto implica que el compilador debe realizar un análisis de tipos en dos fases: una primera de recolección de restricciones y una segunda de sustitución, permitiendo que incluso el bucle `for` y las operaciones con `Vector` e `Iterable` infieran los tipos correctos de los elementos sin necesidad de anotaciones explícitas.
 
 
+### 3) Análisis de Decisiones de Diseño
 
-3) Análisis de Decisiones de Diseño
+Las decisiones de diseño de HULK se basan en criterios pedagógicos y técnicos: **simplicidad, predecibilidad y seguridad**.
 
-Las decisiones se han basado en criterios pedagógicos y técnicos: simplicidad, predecibilidad y seguridad. Elegir un sistema de tipos estático con inferencia local facilita la enseñanza de reglas de tipado (Γ ⊢ e : τ) sin abrumar con metaprogramación de tipos. Respecto a la organización de memoria, se usa el stack para marcos de activación y el heap para valores dinámicos (strings, estructuras), lo que refleja la distinción teórica entre duración automática y dinámica.
+*   **Simplicidad del Sistema de Tipos**: Elegir un sistema de tipos estático con inferencia local (no Hindley-Milner) facilita la enseñanza de reglas de tipado (Γ ⊢ e : τ) sin abrumar con metaprogramación de tipos.
+*   **Organización de la Memoria**: Aunque la implementación del compilador de HULK gestiona la memoria para el código intermedio, su modelo conceptual se asemeja a los lenguajes con pila y heap para valores dinámicos (strings, objetos), reflejando la distinción teórica entre duración automática y dinámica.
+*   **Procesamiento y Transpilación**: Se prefiere un enfoque compilado a un IR (Intermediate Representation) con posibilidad de ejecución interpretada para pruebas. El uso extensivo de la transpilación (para `for`, `funtores`, `T[]`) permite añadir funcionalidades complejas sin modificar el núcleo del evaluador.
+*   **Varianza y Seguridad de Tipos**: Los protocolos de HULK respetan la varianza en su implementación (los argumentos son contravariantes, los retornos covariantes). Para extensiones futuras como genéricos, se propone un enfoque similar a C# (con anotaciones `in`/`out`) para garantizar la seguridad de tipos en asignaciones y llamadas polimórficas.
 
-En cuanto al procesamiento, se prefirió un enfoque compilado a IR con posibilidad de ejecución interpretada por el `evaluator` en pruebas; esto permite ilustrar las diferencias entre procesamiento interpretado y compilado, y abre camino a JIT si se adopta LLVM como backend.
+### 4) Comparativa con Otros Lenguajes
 
-Varianza y seguridad de tipos: la propuesta de genéricos contempla restricciones covariantes/contravariantes para evitar violaciones de tipo en asignaciones y llamadas. En la comparación con C#/Java, se observa que estos lenguajes resuelven la varianza con anotaciones explícitas y reglas de subtipado; en HULK, por simplicidad, se propondría inicialmente restringir la varianza para evitar complejidad en la asignación.
+HULK se diseña como un lenguaje educativo, priorizando la claridad y la seguridad sobre la máxima expresividad o el rendimiento.
 
-4) Comparativa con Otros Lenguajes
+*   **Frente a Python**: Ofrece mayor seguridad de tipo gracias a su verificación estática. Sin embargo, la sintaxis de HULK es más verbosa y su ecosistema de bibliotecas es casi inexistente.
+*   **Frente a Java**: Ofrece una experiencia de desarrollo más ligera y rápida para experimentar, con características como la inferencia de tipos y funciones de primera clase sin la necesidad de definir interfaces explícitas para cada caso.
+*   **Frente a JavaScript**: Evita coerciones implícitas que causan errores sutiles en tiempo de ejecución.
 
-HULK se diseña como lenguaje educativo con orientación a la seguridad y claridad en lugar de máxima expresividad o rendimiento. Frente a Python ofrece mayor seguridad de tipo; frente a Java ofrece mayor ligereza y rapidez para experimentar; frente a JavaScript evita coerciones implícitas que causan errores sutiles. La elección de características (tipado estático parcial, funciones de primera clase pero sin closures completos aún, soporte para recursividad) busca un equilibrio entre paradigmas imperativo y funcional, facilitando la transición del estudiante entre modelos teóricos y prácticos.
+La elección de características (tipado estático parcial, funciones de primera clase, soporte para recursividad, protocolos) busca un equilibrio entre paradigmas imperativo y funcional. Esto facilita la transición del estudiante entre modelos teóricos y prácticos, preparándolo para aprender lenguajes más complejos.
 
-Conclusión de la sección: el diseño de HULK prioriza enseñar y aplicar principios de lenguajes (tipos, ámbitos, ejecución en pila) con extensiones que permiten explorar paradigmas funcionales y genéricos sin introducir complejidad excesiva. Las extensiones propuestas siguen un camino incremental: primero garantizar corrección semántica y luego añadir expresividad (generics, closures, optimizaciones).
+**Conclusión de la sección**: El diseño de HULK prioriza enseñar y aplicar principios de lenguajes (tipos, ámbitos, ejecución en pila) con extensiones que permiten explorar paradigmas funcionales y genéricos sin introducir complejidad excesiva. Las extensiones propuestas siguen un camino incremental: primero garantizar corrección semántica (con el sistema de tipos y protocolos) y luego añadir expresividad (funtores, lambdas, genéricos).
 
 ## 9. 🧪 Pruebas y validación incremental
 
