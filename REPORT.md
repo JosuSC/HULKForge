@@ -236,10 +236,4 @@ En síntesis, HULK es tanto una herramienta de aprendizaje como una base de inge
 - `semantic/context.rs`, `semantic/checker.rs` — tabla de símbolos y verificación semántica.
 - `codegen.rs`, `evaluator/` — generación de código y evaluación/ejecución de la representación intermedia.
 
-Si desea, puedo:
 
-- Ejecutar la suite de tests del proyecto y adjuntar un resumen de fallos y cobertura.
-- Añadir secciones específicas en el reporte sobre un módulo concreto (por ejemplo, detallar la estructura de `context.rs`).
-- Generar diagramas de flujo de datos o mermaid para ilustrar la pipeline del compilador.
-
-Indíqueme cuál de estas acciones prefiere y lo haré a continuación.
