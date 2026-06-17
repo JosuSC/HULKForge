@@ -111,7 +111,6 @@ cargo fetch                    # downloads all deps into the local cargo cache
 ```bash
 git clone https://github.com/JosuSC/HulkForge.git
 cd HulkForge
-git checkout semantic          # branch under active development
 ```
 
 #### 2. Build the compiler
