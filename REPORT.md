@@ -42,7 +42,9 @@ Ejemplo práctico: la regla de expresiones aritméticas fue refactorizada para e
 
 ## 4. 🌳 Construcción del AST (Árbol de Sintaxis Abstracta)
 
-Tras la fase sintáctica, el compilador construye un AST: una representación estructurada y minimalista de la semántica del programa. En el código, la construcción del AST se realiza en `parser/ast.rs` y `parser/parser.rs`, donde las funciones del parser devuelven nodos del AST en lugar de árboles de derivación completos.
+Tras la fase sintáctica, y justo un paso después de esta, el compilador construye un AST: una representación estructurada y minimalista de la semántica del programa. En el código, la construcción del AST se realiza en `parser/ast.rs` y `parser/parser.rs`, donde las funciones del parser devuelven nodos del AST en lugar de árboles de derivación completos.
+
+En el archivo `parser.rs`, específicamente encabezando el script, se encuentra un conjunto de métodos esenciales que determinan el conjunto de operaciones a seguir durante la secuenciación del listado de tokens. Estos métodos constituyen el núcleo del análisis sintáctico descendente recursivo, implementando la lógica de navegación, verificación y consumo de tokens que permite la construcción incremental del árbol sintáctico abstracto (AST). La arquitectura del parser se fundamenta en una máquina de estados que, mediante estrategias de anticipación y recuperación de errores, garantiza la robustez del proceso de parsing incluso ante entradas sintácticamente incorrectas. Posteriormente, se encuentran las implementaciones de parseo correspondientes a cada una de las estructuras gramaticales definidas en la especificación formal del lenguaje HULK, abarcando desde las expresiones primarias y operaciones binarias hasta las construcciones de control de flujo, declaraciones y demás elementos sintácticos que conforman la totalidad del lenguaje. Cada una de estas implementaciones sigue fielmente las reglas de producción establecidas en la gramática, garantizando así la correcta correspondencia entre la secuencia de tokens de entrada y la representación semántica resultante en el AST.
 
 Teóricamente, el AST elimina información sintáctica irrelevante (como paréntesis redundantes, nodos intermedios de la gramática o símbolos de puntuación) para mantener únicamente la estructura semántica significativa: declaraciones, expresiones, llamadas a función, bloques y criterios de control. Esta compacidad facilita el análisis semántico y la optimización posterior porque reduce el árbol a los elementos que realmente afectan al comportamiento del programa.
 
@@ -60,9 +62,39 @@ La resolución de símbolos en HULK consiste en insertar las definiciones (de va
 
 La verificación de tipos se apoya en reglas formales de compatibilidad: cada operación tiene un conjunto de tipos válidos para sus operandos y un tipo resultado. El checker recorre el AST y, empleando un algoritmo de inferencia local y comprobaciones explícitas, asigna tipos a expresiones y reporta inconsistencias. En caso de operaciones entre tipos incompatibles (por ejemplo, sumar un `String` y un `Number` sin conversión explícita), se emite un error semántico con localización.
 
-Si HULK soporta características avanzadas como funciones recursivas o sobrecarga básica, la infraestructura de la tabla de símbolos y la verificación de firmas está preparada para manejarlas: las firmas se registran antes del chequeo de cuerpos de funciones para permitir llamadas recursivas, y la comprobación de sobrecarga (si existe) usa mecanismos de selección de firma según tipos de argumentos.
+HULK soporta características avanzadas como funciones recursivas o sobrecarga básica. Para ello, la infraestructura de la tabla de símbolos y el sistema de verificación de firmas se encuentran capacitados para manejar dichos casos: las firmas se registran antes del chequeo de cuerpos de funciones para permitir llamadas recursivas, y la comprobación de sobrecarga usa mecanismos de selección de firma según tipos de argumentos.
 
-El análisis semántico también incorpora comprobaciones adicionales: variables no inicializadas, retornos en funciones (asegurando que todas las ramas devuelvan el tipo correcto), y verificación de tipos en estructuras de control (p. ej. condición de `if` debe ser booleano). Estas comprobaciones reflejan la distinción teórica entre propiedades sintácticas (libres de contexto) y propiedades semánticas (dependientes del contexto).
+> NOTA: Si bien la especificación del lenguaje HULK establece explícitamente en la Sección A.3.1 que "no hay sobrecargas en HULK" —dado que todas las funciones residen en un único espacio de nombres global y no se permite repetir identificadores—, el propio documento añade la salvedad de que esta restricción aplica "al menos en el HULK 'básico'". Por tanto, nos propusimos extender el lenguaje incorporando sobrecarga de métodos y funciones como un mecanismo legítimo de polimorfismo
+
+### Comprobaciones semánticas (errores detectados)
+
+El análisis semántico incorpora múltiples comprobaciones que detectan errores dependientes del contexto. A continuación se detallan las principales, con una breve explicación de cada una:
+
+- **Variables no inicializadas:** Verifica el uso de variables antes de asignarles un valor, evitando lecturas indefinidas en tiempo de ejecución.
+- **Identificadores no declarados:** Detecta referencias a variables o funciones que no existen en el ámbito visible.
+- **Redefiniciones / shadowing inválido:** Señala declaraciones que colisionan con identificadores ya existentes cuando la política del lenguaje lo prohíbe.
+- **Incompatibilidad de tipos en asignaciones y expresiones:** Comprueba que el tipo del valor asignado o de los operandos en una operación sea compatible con el tipo esperado.
+- **Llamadas a funciones con aridad/firmas incorrectas:** Verifica que el número y tipos de argumentos en una llamada coincidan con la firma registrada de la función.
+- **Retornos en funciones:** Asegura que todas las rutas de ejecución en una función devuelvan el tipo declarado (o que las funciones `void` no retornen valor), evitando inconsistencias de tipo en retornos.
+- **Comprobación de tipos en estructuras de control:** Verifica que la condición en `if`, `elif` y `while` sea siempre de tipo `Boolean`. Por ejemplo, `if (x > 0)` es válido porque `x > 0` devuelve un booleano, pero `if (42)` es inválido porque `42` es un número. Esto previene errores lógicos y asegura que el programa sea claro y predecible.
+- **Operaciones no válidas entre tipos:** Detecta operaciones entre tipos que no tienen semántica definida (p. ej. sumar `String` y `Number` sin conversión explícita).
+- **Conversión/coerción insegura:** Señala coerciones implícitas problemáticas o pérdidas de precisión cuando existen conversiones entre tipos incompatibles.
+- **Acceso a miembros inexistentes en objetos:** Esta comprobación verifica que cuando accedes a un miembro de un objeto (usando el operador `.`), ese miembro (método) exista realmente en el tipo del objeto (ya sea propio o heredado).
+- **Comprobación de expresiones constantes y errores detectables en tiempo de compilación:** Detecta divisiones por cero constantes, accesos fuera de rango estáticos y otras anomalías evaluables en compilación.
+
+- **Protocolos e implementación estructural:** Soporte para declarar `protocols` con herencia entre protocolos y comprobación de que un `type` implementa los métodos requeridos por un `protocol` (incluye comprobación de compatibilidad de firmas por nombre y aridad).
+- **Verificación de herencia de tipos y detección de ciclos:** Comprobación de que el `parent` de un `type` exista, que los argumentos genéricos coincidan con la aridad esperada y detección de ciclos de herencia que producirían inconsistencias.
+- **Comprobación de overrides en métodos heredados:** Las sobrescrituras de métodos en subtipos deben conservar la firma exacta del método heredado; se reportan errores cuando la firma no coincide (parámetros o tipo de retorno).
+- **Compatibilidad subtipada y comprobación LCA:** Determinación de subtipado por la cadena de padres; cálculo del "lowest common ancestor" para deducir tipos resultantes en expresiones condicionales multi-rama.
+- **Soporte de type parameters (aritmetrica de parámetros):** Registro y verificación del número de parámetros de tipo esperados en una declaración `type` y en cláusulas `inherits` al instanciar tipos genéricos.
+- **Protocol conformance entre protocolos:** Verificación de que un `protocol` concreto conforma a otro `protocol` esperado (incluye herencia de protocolos y compatibilidad de firmas) es decir, si un `type` que implementa el protocolo A puede ser usado en todos los lugares donde se espera el protocolo B.
+- **Comprobación de firmas y compatibilidad de llamadas:** Registro de firmas de funciones, métodos y builtins; comprobación de aridad y tipos de argumentos en llamadas y en llamadas a métodos/builtins.
+- **Iterable/Enumerable y verificación de `for` loops:** Protocolos `Iterable` / `Enumerable` integrados; el análisis decide si una expresión es iterable, marca usos iterables y registra el tipo del elemento iterado para propagar tipos en el cuerpo del bucle.
+- **Inferencia conservadora de tipos simples:** Inferencia local y conservadora para `Number`, `String`, `Boolean` y tipos nombrados; inferencia de tipos de retorno de funciones/bodies cuando es posible y actualización de firmas registradas.
+- **Restricciones en `self` y `base`:** Validación del ámbito de `self` restringido exclusivamente al contexto de métodos de instancia, incluyendo sus reglas de uso y limitaciones; `base` solo dentro de métodos de tipos con padre y verificación de llamadas a la implementación del padre con firma compatible.
+- **Control de asignaciones e inferencia en `let` bindings:** Verificación de tipos en inicializadores; si existe anotación, se comprueba conformidad; si no, se infiere y se propaga a la variable en el scope adecuado (incluye advertencias cuando la inferencia detecta incompatibilidades transitorias).
+
+Estas comprobaciones reflejan la distinción teórica entre propiedades sintácticas (libres de contexto) y propiedades semánticas (dependientes del contexto), y permiten detectar errores que solo son visibles una vez que se dispone de información de ámbito y tipos.
 
 ## 6. 🧬 Sistema de Tipos (Type System)
 
